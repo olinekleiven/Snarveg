@@ -1,10 +1,14 @@
-# Snarveg — MIX301 Project 
-### (Media and Interaction Design, UiB)
+# Snarveg 
+### *(Master in Media and Interaction Design, University of Bergen)*  
 
-Team:
-Oline Kleiven – Developer
-Ole Gåsvær– Researcher
-Sol Hansen Berg – UX Designer
+---
+
+### 👥 **Team**  
+-  **Oline Kleiven** — Developer  
+-  **Ole Gåsvær** — Researcher  
+-  **Sol Hansen Berg** — UX Designer  
+
+---
 
 
 We are a small interdisciplinary team exploring AI-assisted design and development workflows in our master’s course MIX301 – Media Technology: Theory and Development at the University of Bergen.
