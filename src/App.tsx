@@ -22,15 +22,15 @@ import { motion, AnimatePresence } from 'framer-motion';
 
 export default function App() {
   const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(false);
-  const [userPreferences, setUserPreferences] = useState<UserPreferences | null>(null);
-  const [destinations, setDestinations] = useState<Destination[]>(INITIAL_DESTINATIONS);
-  const [connections, setConnections] = useState<Connection[]>([]);
+  const [userPreferences, setUserPreferences] = useState(null);
+  const [destinations, setDestinations] = useState(INITIAL_DESTINATIONS);
+  const [connections, setConnections] = useState([]);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isTicketOverviewOpen, setIsTicketOverviewOpen] = useState(false);
-  const [editingDestination, setEditingDestination] = useState<Destination | null>(null);
-  const [viewMode, setViewMode] = useState<'wheel' | 'route'>('wheel');
-  const [currentRoute, setCurrentRoute] = useState<Route | null>(null);
+  const [editingDestination, setEditingDestination] = useState(null);
+  const [viewMode, setViewMode] = useState('wheel');
+  const [currentRoute, setCurrentRoute] = useState(null);
   const [hasActiveTicket, setHasActiveTicket] = useState(false);
 
   // Check if user has completed onboarding
@@ -297,7 +297,7 @@ export default function App() {
       <TicketOverview
         isOpen={isTicketOverviewOpen}
         onClose={() => setIsTicketOverviewOpen(false)}
-        plannedTravelTime={currentRoute?.totalTime}
+        plannedTravelTime={viewMode === 'route' ? currentRoute?.totalTime : undefined}
         onPurchaseTicket={handlePurchaseTicket}
       />
     </div>
