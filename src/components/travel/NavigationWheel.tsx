@@ -40,6 +40,9 @@ export default function NavigationWheel({
   const [longPressNodeId, setLongPressNodeId] = useState<string | null>(null);
   const [pointerStartPos, setPointerStartPos] = useState<{ x: number; y: number } | null>(null);
   const [pointerDownNodeId, setPointerDownNodeId] = useState<string | null>(null);
+  const [chainedDrawing, setChainedDrawing] = useState(false);
+  const [chainedFromNode, setChainedFromNode] = useState<string | null>(null);
+  const currentMousePosRef = useRef<{ x: number; y: number } | null>(null);
 
   const centerNode = destinations.find(d => d.isCenter);
   const otherNodes = destinations.filter(d => !d.isCenter);
@@ -201,13 +204,18 @@ export default function NavigationWheel({
       }
     }
     
-    if (!isDrawing || !containerRef.current || !drawStart) return;
+    if ((!isDrawing && !chainedDrawing) || !containerRef.current || !drawStart) return;
 
     const rect = containerRef.current.getBoundingClientRect();
-    setDrawCurrent({
+    const mousePos = {
       x: e.clientX - rect.left,
       y: e.clientY - rect.top,
-    });
+    };
+    
+    // Store current mouse position for chained drawing
+    currentMousePosRef.current = mousePos;
+    
+    setDrawCurrent(mousePos);
 
     // Check if hovering over a node
     const hoveredDest = destinations.find(dest => {
@@ -323,13 +331,16 @@ export default function NavigationWheel({
     setPointerStartPos(null);
     setPointerDownNodeId(null);
 
-    if (!isDrawing || !drawStart) {
+    if ((!isDrawing && !chainedDrawing) || !drawStart) {
       setIsDrawing(false);
+      setChainedDrawing(false);
+      setChainedFromNode(null);
       setDrawStart(null);
       setDrawCurrent(null);
       setHoveredNode(null);
       setLockProgress(0);
       setHoverStartTime(null);
+      currentMousePosRef.current = null;
       return;
     }
 
@@ -342,6 +353,12 @@ export default function NavigationWheel({
       setCarAnimation({ from: drawStart.id, to: hoveredNode });
       
       setLockingConnection({ from: drawStart.id, to: hoveredNode });
+      
+      // If this is chained drawing, stop it and start regular drawing
+      if (chainedDrawing) {
+        setChainedDrawing(false);
+        setChainedFromNode(null);
+      }
 
       // Start lock timer
       const startTime = Date.now();
@@ -364,10 +381,20 @@ export default function NavigationWheel({
         // Clear car animation after lock
         setCarAnimation(null);
         
-        // Stop drawing - user must explicitly start a new drag from the next node
-        setIsDrawing(false);
-        setDrawStart(null);
-        setDrawCurrent(null);
+        // Enable chained drawing - continue from the target node
+        setChainedDrawing(true);
+        setChainedFromNode(hoveredNode);
+        
+        // Update drawStart to the target node position
+        const targetNodePos = getNodeScreenPosition(destinations.find(d => d.id === hoveredNode)!);
+        setDrawStart({ id: hoveredNode, ...targetNodePos });
+        
+        // Keep drawCurrent at mouse position for immediate continuation
+        if (currentMousePosRef.current) {
+          setDrawCurrent(currentMousePosRef.current);
+        } else {
+          setDrawCurrent(targetNodePos);
+        }
 
         setLockingConnection(null);
         setLockProgress(0);
@@ -378,11 +405,14 @@ export default function NavigationWheel({
     } else {
       // Reset if not released on valid node
       setIsDrawing(false);
+      setChainedDrawing(false);
+      setChainedFromNode(null);
       setDrawStart(null);
       setDrawCurrent(null);
       setHoveredNode(null);
       setLockProgress(0);
       setHoverStartTime(null);
+      currentMousePosRef.current = null;
     }
   };
 
@@ -403,11 +433,14 @@ export default function NavigationWheel({
     setLockingConnection(null);
     setCarAnimation(null);
     setIsDrawing(false);
+    setChainedDrawing(false);
+    setChainedFromNode(null);
     setDrawStart(null);
     setDrawCurrent(null);
     setHoveredNode(null);
     setLockProgress(0);
     setHoverStartTime(null);
+    currentMousePosRef.current = null;
   };
 
   // Clean up timers on unmount
@@ -485,7 +518,7 @@ export default function NavigationWheel({
           )}
 
           {/* Active drawing line */}
-          {isDrawing && drawStart && drawCurrent && !lockingConnection && (
+          {(isDrawing || chainedDrawing) && drawStart && drawCurrent && !lockingConnection && (
             <motion.g>
               <motion.line
                 x1={drawStart.x}
@@ -502,23 +535,53 @@ export default function NavigationWheel({
                 initial={{ pathLength: 0 }}
                 animate={{ pathLength: 1 }}
               />
-              {/* Arrow at the end */}
-              <motion.path
-                d={`M ${drawCurrent.x} ${drawCurrent.y} 
-                    L ${drawCurrent.x - 10} ${drawCurrent.y - 10} 
-                    M ${drawCurrent.x} ${drawCurrent.y} 
-                    L ${drawCurrent.x - 10} ${drawCurrent.y + 10}`}
-                stroke={hoveredNode ? 
-                  destinations.find(d => d.id === hoveredNode)?.color || '#3B82F6' 
-                  : '#94A3B8'
-                }
-                strokeWidth="3"
-                strokeLinecap="round"
-                opacity={0.8}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 0.8 }}
-              />
+              {/* Arrow at the end - dynamically rotated */}
+              {(() => {
+                // Calculate angle from drawStart to drawCurrent
+                const angle = Math.atan2(drawCurrent.y - drawStart.y, drawCurrent.x - drawStart.x);
+                const arrowLength = 10;
+                const arrowAngle = Math.PI / 6; // 30 degrees
+                
+                // Calculate arrow points
+                const arrowX1 = drawCurrent.x - arrowLength * Math.cos(angle - arrowAngle);
+                const arrowY1 = drawCurrent.y - arrowLength * Math.sin(angle - arrowAngle);
+                const arrowX2 = drawCurrent.x - arrowLength * Math.cos(angle + arrowAngle);
+                const arrowY2 = drawCurrent.y - arrowLength * Math.sin(angle + arrowAngle);
+                
+                return (
+                  <motion.path
+                    d={`M ${drawCurrent.x} ${drawCurrent.y} 
+                        L ${arrowX1} ${arrowY1} 
+                        M ${drawCurrent.x} ${drawCurrent.y} 
+                        L ${arrowX2} ${arrowY2}`}
+                    stroke={hoveredNode ? 
+                      destinations.find(d => d.id === hoveredNode)?.color || '#3B82F6' 
+                      : '#94A3B8'
+                    }
+                    strokeWidth="3"
+                    strokeLinecap="round"
+                    opacity={0.8}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 0.8 }}
+                  />
+                );
+              })()}
             </motion.g>
+          )}
+          
+          {/* Chained drawing indicator */}
+          {chainedDrawing && chainedFromNode && (
+            <motion.text
+              x={getNodeScreenPosition(destinations.find(d => d.id === chainedFromNode)!).x}
+              y={getNodeScreenPosition(destinations.find(d => d.id === chainedFromNode)!).y - 30}
+              textAnchor="middle"
+              className="text-xs font-medium fill-blue-600"
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: 0.5 }}
+            >
+              Fortsett å tegne...
+            </motion.text>
           )}
           
           {/* Car animation on route */}

@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Ticket, Clock, Calendar, CheckCircle2, ShoppingCart, Sparkles } from 'lucide-react';
-import Confetti from './Confetti';
 
 interface TicketOverviewProps {
   isOpen: boolean;
@@ -93,7 +92,6 @@ const ticketOptions: TicketOption[] = [
 ];
 
 export default function TicketOverview({ isOpen, onClose, plannedTravelTime, onPurchaseTicket }: TicketOverviewProps) {
-  const [showConfetti, setShowConfetti] = useState(false);
   const [activeTicket, setActiveTicket] = useState<{
     type: string;
     expiresAt: Date;
@@ -142,9 +140,6 @@ export default function TicketOverview({ isOpen, onClose, plannedTravelTime, onP
     setActiveTicket(newTicket);
     localStorage.setItem('snarveg_active_ticket', JSON.stringify(newTicket));
     
-    // Show confetti!
-    setShowConfetti(true);
-    
     if (onPurchaseTicket) {
       onPurchaseTicket(ticket.id, ticket.duration, ticket.price);
     }
@@ -152,8 +147,7 @@ export default function TicketOverview({ isOpen, onClose, plannedTravelTime, onP
     // Close modal after successful purchase
     setTimeout(() => {
       onClose();
-      setTimeout(() => setShowConfetti(false), 500);
-    }, 2000);
+    }, 1000);
   };
 
   const getTimeRemaining = () => {
@@ -178,9 +172,7 @@ export default function TicketOverview({ isOpen, onClose, plannedTravelTime, onP
   const timeRemaining = getTimeRemaining();
 
   return (
-    <>
-      <Confetti show={showConfetti} />
-      <AnimatePresence>
+    <AnimatePresence>
         {isOpen && (
           <motion.div
             initial={{ opacity: 0 }}
@@ -347,6 +339,5 @@ export default function TicketOverview({ isOpen, onClose, plannedTravelTime, onP
       </motion.div>
         )}
       </AnimatePresence>
-    </>
   );
 }
