@@ -1,0 +1,47 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    @apply border-gray-200;
+  }
+
+  body {
+    @apply bg-white text-gray-900;
+  }
+}
+
+@layer base {
+  h1 {
+    @apply text-2xl font-medium leading-6;
+  }
+
+  h2 {
+    @apply text-xl font-medium leading-6;
+  }
+
+  h3 {
+    @apply text-lg font-medium leading-6;
+  }
+
+  h4 {
+    @apply text-base font-medium leading-6;
+  }
+
+  p {
+    @apply text-base font-normal leading-6;
+  }
+
+  label {
+    @apply text-base font-medium leading-6;
+  }
+
+  button {
+    @apply text-base font-medium leading-6;
+  }
+
+  input {
+    @apply text-base font-normal leading-6;
+  }
+}
