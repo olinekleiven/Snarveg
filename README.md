@@ -60,7 +60,7 @@ This project combines user-centered design, AI-driven prototyping, and vibe codi
 ### Important notes:
 - Always run `git pull` before starting new work to get the latest changes
 - Write clear commit messages describing what you changed
-- If you get errors, ask for help - don't worry!
+- Reflect and document the use of AI-tools.
 
 
 
