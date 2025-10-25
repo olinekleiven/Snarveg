@@ -1,3 +1,4 @@
+import React from "react";
 import svgPaths from "./svg-42raqsyfh4";
 import clsx from "clsx";
 import imgTomato from "figma:asset/c7319cef2b86a8f71b6765b77a10caccb7fc8b83.png";

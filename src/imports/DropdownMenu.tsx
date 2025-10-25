@@ -1,3 +1,5 @@
+import React from "react";
+
 function MenuItem() {
   return (
     <div className="relative shrink-0 w-full" data-name="_MenuItem_">

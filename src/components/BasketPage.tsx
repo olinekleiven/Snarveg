@@ -1,4 +1,3 @@
-import React from 'react';
 import svgPaths from "../imports/svg-ixc5uwmuox";
 import QuantityDropdown from './QuantityDropdown';
 import IconForward from '../imports/IconForward-2013-176';

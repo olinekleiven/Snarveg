@@ -1,3 +1,4 @@
+import React from "react";
 import svgPaths from "./svg-s5y93igtx2";
 import clsx from "clsx";
 import imgRectangle6538 from "figma:asset/39a095c5219433210528f313f4db7ed09e8b6466.png";

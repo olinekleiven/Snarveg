@@ -1,3 +1,4 @@
+import React from "react";
 import svgPaths from "./svg-ved004mhkj";
 
 function Frame13() {

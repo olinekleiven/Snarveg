@@ -1,3 +1,4 @@
+import React from "react";
 import svgPaths from "./svg-rtzumy3dpq";
 import clsx from "clsx";
 import imgProductImage from "figma:asset/c7319cef2b86a8f71b6765b77a10caccb7fc8b83.png";

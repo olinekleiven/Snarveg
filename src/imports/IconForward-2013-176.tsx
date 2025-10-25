@@ -1,3 +1,4 @@
+import React from "react";
 import svgPaths from "./svg-cdpfvtihv7";
 
 export default function IconForward() {

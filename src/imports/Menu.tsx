@@ -1,3 +1,4 @@
+import React from "react";
 import imgRectangle6537 from "figma:asset/73a0a2712c55c814e558e14ad018e308fab9b18c.png";
 
 function Frame7() {
