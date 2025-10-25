@@ -10,13 +10,9 @@
 
 ---
 
+We are a small interdisciplinary team exploring AI-assisted design and development workflows in the master's course MIX301 – Media Technology: Theory and Development at the University of Bergen. Our project, Snarveg, explores how AI tools can improve rapid prototyping, iteration and collaboration across design, research and development. The goal is to create an intuitive travel app that helps people get from A to B in Bergen – faster, easier and with a better user experience. By combining user-centered design, AI-driven prototyping and vibe coding methods, Snarveg explores how new technologies can shape the future of mobility and interaction design.
 
-We are a small interdisciplinary team exploring AI-assisted design and development workflows in our master’s course MIX301 – Media Technology: Theory and Development at the University of Bergen.
-Our project, Snarveg, investigates how AI tools can support rapid prototyping, iteration, and collaboration across design, research, and development. The goal is to create an intuitive travel app that makes it easier to get from A to B in Bergen — faster, simpler, and with better UX.
-This project combines user-centered design, AI-driven prototyping, and vibe coding methods to explore how emerging technologies can shape the future of mobility and interaction design.
-
-
-
+---
 
   # Snarveg_Sketch
 
@@ -28,12 +24,16 @@ This project combines user-centered design, AI-driven prototyping, and vibe codi
 
   Run `npm run dev` to start the development server.
   
+---
 
+### Important notes:
+- Always run `git pull` before starting new work to get the latest changes
+- Write clear commit messages describing what you changed
+- Reflect and document the use of AI-tools.
 
+---
 
-
-## How to work with Git (for you, my team members)
-
+## How to work with Git:
 ### When you want to make changes:
 
 1. **First, check what's changed:**
@@ -60,11 +60,7 @@ This project combines user-centered design, AI-driven prototyping, and vibe codi
    ```bash
    git pull
    ```
-
-### Important notes:
-- Always run `git pull` before starting new work to get the latest changes
-- Write clear commit messages describing what you changed
-- Reflect and document the use of AI-tools.
-
+   
+---
 
 
