@@ -21,8 +21,14 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 
 export default function App() {
-  const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(false);
-  const [userPreferences, setUserPreferences] = useState(null);
+  // Check localStorage immediately for initial state
+  const initialOnboardingState = false; // Force show onboarding
+  const initialPreferences = localStorage.getItem(STORAGE_KEYS.PREFERENCES) 
+    ? JSON.parse(localStorage.getItem(STORAGE_KEYS.PREFERENCES) || 'null')
+    : null;
+
+  const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(initialOnboardingState);
+  const [userPreferences, setUserPreferences] = useState(initialPreferences);
   const [destinations, setDestinations] = useState(INITIAL_DESTINATIONS);
   const [connections, setConnections] = useState([]);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -35,13 +41,19 @@ export default function App() {
 
   // Check if user has completed onboarding
   useEffect(() => {
-    const onboardingComplete = localStorage.getItem(STORAGE_KEYS.ONBOARDING_COMPLETE);
     const savedPreferences = localStorage.getItem(STORAGE_KEYS.PREFERENCES);
     
-    if (onboardingComplete === 'true' && savedPreferences) {
-      setHasCompletedOnboarding(true);
+    if (savedPreferences) {
       setUserPreferences(JSON.parse(savedPreferences));
     }
+    
+    // DON'T check onboardingComplete - always show onboarding!
+    // Commented out to force onboarding every time:
+    // const onboardingComplete = localStorage.getItem(STORAGE_KEYS.ONBOARDING_COMPLETE);
+    // if (onboardingComplete === 'true' && savedPreferences) {
+    //   setHasCompletedOnboarding(true);
+    //   setUserPreferences(JSON.parse(savedPreferences));
+    // }
 
     // Check for active ticket
     const checkTicket = () => {
@@ -118,6 +130,17 @@ export default function App() {
     setDestinations(prev => prev.map(d => d.id === destination.id ? destination : d));
   };
 
+  const handleClearNode = (destinationId: string) => {
+    // Reset node to empty state
+    setDestinations(prev => prev.map(d => 
+      d.id === destinationId 
+        ? { ...d, label: 'Legg til sted', emoji: '+', color: '#E5E7EB', address: undefined, coordinates: undefined, notes: undefined, isEmpty: true }
+        : d
+    ));
+    // Remove any connections involving this node
+    setConnections(prev => prev.filter(c => c.from !== destinationId && c.to !== destinationId));
+  };
+
   const handleNodeClick = (destination: Destination) => {
     setEditingDestination(destination);
     setIsEditModalOpen(true);
@@ -167,6 +190,7 @@ export default function App() {
   if (!hasCompletedOnboarding) {
     return <OnboardingFlow onComplete={handleOnboardingComplete} />;
   }
+
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 overflow-hidden relative">
@@ -282,6 +306,7 @@ export default function App() {
         isOpen={isEditModalOpen}
         onClose={() => setIsEditModalOpen(false)}
         onSave={handleEditDestination}
+        onClear={() => editingDestination && handleClearNode(editingDestination.id)}
         destination={editingDestination}
       />
 

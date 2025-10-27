@@ -77,6 +77,20 @@ export default function NavigationWheel({
     e.preventDefault();
     e.stopPropagation();
     
+    const dest = destinations.find(d => d.id === nodeId);
+    if (!dest) return;
+    
+    // If this is an empty node, just open the modal immediately on click
+    if (dest.isEmpty || dest.label === 'Legg til sted') {
+      if (onNodeClick) {
+        onNodeClick(dest);
+        if (navigator.vibrate) {
+          navigator.vibrate(50);
+        }
+      }
+      return;
+    }
+    
     // Store initial position for click detection
     const rect = containerRef.current?.getBoundingClientRect();
     if (rect) {
@@ -84,7 +98,7 @@ export default function NavigationWheel({
       setPointerDownNodeId(nodeId);
     }
     
-    // Start long-press timer (700ms) to open edit modal
+    // Start long-press timer (700ms) to open edit modal for filled nodes
     const timer = setTimeout(() => {
       const destination = destinations.find(d => d.id === nodeId);
       if (destination && onNodeClick) {
@@ -106,9 +120,6 @@ export default function NavigationWheel({
     
     setLongPressTimer(timer);
     setLongPressNodeId(nodeId);
-    
-    const dest = destinations.find(d => d.id === nodeId);
-    if (!dest) return;
 
     // Check if this node can start a drawing
     const canDrawFrom = canNodeStartDrawing(nodeId);
@@ -133,6 +144,16 @@ export default function NavigationWheel({
 
   // Helper function to check if a node can start a drawing
   const canNodeStartDrawing = (nodeId: string): { allowed: boolean; message?: string } => {
+    const destination = destinations.find(d => d.id === nodeId);
+    
+    // Check if target node is empty (isEmpty or has no name)
+    if (destination?.isEmpty || !destination?.label || destination?.label.trim() === '' || destination?.label === 'Legg til sted') {
+      return {
+        allowed: false,
+        message: 'Du kan ikke koble til en tom node. Fyll inn node først!',
+      };
+    }
+    
     const isHomeNode = nodeId === 'home';
     
     // If no connections exist yet, only home can start drawing
@@ -220,6 +241,11 @@ export default function NavigationWheel({
     // Check if hovering over a node
     const hoveredDest = destinations.find(dest => {
       if (dest.id === drawStart.id) return false;
+      
+      // Don't allow hovering over empty nodes
+      if (dest.isEmpty || !dest.label || dest.label.trim() === '' || dest.label === 'Legg til sted') {
+        return false;
+      }
       
       const pos = getNodeScreenPosition(dest);
       const dx = (e.clientX - rect.left) - pos.x;

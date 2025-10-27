@@ -115,9 +115,11 @@ export default function DestinationNode({
       <div
         className={`relative w-full h-full rounded-full shadow-xl flex flex-col items-center justify-center backdrop-blur-sm transition-all ${
           isCenter ? 'bg-gradient-to-br from-gray-700 to-gray-900' : ''
-        } ${!isDrawable ? 'opacity-40' : ''}`}
+        } ${!isDrawable ? 'opacity-40' : ''} ${
+          destination.isEmpty ? 'bg-gray-100 border-2 border-dashed border-gray-300' : ''
+        }`}
         style={{
-          backgroundColor: isCenter ? undefined : destination.color,
+          backgroundColor: isCenter || destination.isEmpty ? undefined : destination.color,
           boxShadow: isSelected || isHovered
             ? `0 10px 40px -10px ${destination.color}80`
             : '0 4px 20px rgba(0,0,0,0.1)',
@@ -136,6 +138,9 @@ export default function DestinationNode({
             <path d="M12 16 L9 21" stroke="#E5E7EB" strokeWidth="1.5" strokeLinecap="round" />
             <path d="M12 16 L15 21" stroke="#E5E7EB" strokeWidth="1.5" strokeLinecap="round" />
           </svg>
+        ) : destination.isEmpty ? (
+          // Show "+" icon for empty nodes
+          <div className="text-4xl font-light text-gray-500">+</div>
         ) : (
           <div className="text-2xl filter drop-shadow-sm">{destination.emoji}</div>
         )}

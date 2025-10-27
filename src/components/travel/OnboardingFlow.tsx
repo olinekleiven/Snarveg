@@ -149,15 +149,14 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     };
     setPreferences(newPreferences);
 
-    // Auto-advance after selection
-    setTimeout(() => {
-      if (currentStep < questions.length - 1) {
+    // Auto-advance after selection ONLY if not on last step
+    // On last step, user must click "Ferdig!" button manually
+    if (currentStep < questions.length - 1) {
+      setTimeout(() => {
         setDirection(1);
         setCurrentStep(currentStep + 1);
-      } else {
-        onComplete(newPreferences as UserPreferences);
-      }
-    }, 400);
+      }, 800); // Slightly faster transitions between steps
+    }
   };
 
   const handleBack = () => {

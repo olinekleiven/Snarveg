@@ -8,6 +8,7 @@ interface EditDestinationModalProps {
   onClose: () => void;
   onSave: (destination: Destination) => void;
   onDelete?: () => void;
+  onClear?: () => void; // New prop for "Tøm node"
   destination: Destination | null;
 }
 
@@ -33,6 +34,7 @@ export default function EditDestinationModal({
   onClose, 
   onSave, 
   onDelete,
+  onClear,
   destination 
 }: EditDestinationModalProps) {
   const [label, setLabel] = useState('');
@@ -89,6 +91,7 @@ export default function EditDestinationModal({
       notes: notes.trim() || undefined,
       visitTime: visitTime || undefined,
       customFields: Object.keys(customFieldsObject).length > 0 ? customFieldsObject : undefined,
+      isEmpty: false, // Node is no longer empty after being filled
     };
 
     onSave(updatedDestination);
@@ -361,6 +364,20 @@ export default function EditDestinationModal({
                     className="px-4 py-3.5 rounded-xl border border-red-200 text-red-600 active:bg-red-50 transition-colors"
                   >
                     <Trash2 className="w-5 h-5" />
+                  </button>
+                )}
+                {/* "Tøm node" button - only show if node has content and is not the center node */}
+                {onClear && destination && !destination.isCenter && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onClear();
+                      onClose();
+                    }}
+                    className="px-4 py-3.5 rounded-xl border border-orange-200 text-orange-600 active:bg-orange-50 transition-colors"
+                    title="Tøm node"
+                  >
+                    ↻
                   </button>
                 )}
                 <button

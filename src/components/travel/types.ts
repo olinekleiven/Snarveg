@@ -8,6 +8,7 @@ export interface Destination {
     radius: number; // pixels from center
   };
   isCenter?: boolean;
+  isEmpty?: boolean; // true if node is empty (shows "+" icon)
   address?: string;
   coordinates?: {
     lat: number;
