@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import TopBar from './components/travel/TopBar';
 import NavigationWheel from './components/travel/NavigationWheel';
 import EditDestinationModal from './components/travel/EditDestinationModal';
+import SelectLocationModal from './components/travel/SelectLocationModal';
 import RouteVisualization from './components/travel/RouteVisualization';
 import OnboardingFlow, { UserPreferences } from './components/travel/OnboardingFlow';
 import SettingsModal from './components/travel/SettingsModal';
@@ -32,9 +33,11 @@ export default function App() {
   const [destinations, setDestinations] = useState(INITIAL_DESTINATIONS);
   const [connections, setConnections] = useState([]);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isSelectLocationOpen, setIsSelectLocationOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isTicketOverviewOpen, setIsTicketOverviewOpen] = useState(false);
   const [editingDestination, setEditingDestination] = useState(null);
+  const [pendingCoords, setPendingCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [viewMode, setViewMode] = useState('wheel');
   const [currentRoute, setCurrentRoute] = useState(null);
   const [hasActiveTicket, setHasActiveTicket] = useState(false);
@@ -143,6 +146,11 @@ export default function App() {
 
   const handleNodeClick = (destination: Destination) => {
     setEditingDestination(destination);
+    if ((destination as any).isEmpty || destination.label === 'Legg til sted') {
+      // Start at select-location step for empty nodes
+      setIsSelectLocationOpen(true);
+      return;
+    }
     setIsEditModalOpen(true);
   };
 
@@ -302,12 +310,33 @@ export default function App() {
         </AnimatePresence>
       </main>
 
+      {/* Step 1: Select location when user clicks a + node */}
+      <SelectLocationModal
+        isOpen={isSelectLocationOpen}
+        onClose={() => setIsSelectLocationOpen(false)}
+        onNext={(coords) => {
+          setPendingCoords(coords);
+          // Prefill coordinates on the destination and open edit step
+          if (editingDestination) {
+            const prefilled: Destination = {
+              ...editingDestination,
+              coordinates: coords,
+            } as Destination;
+            setEditingDestination(prefilled as any);
+          }
+          setIsSelectLocationOpen(false);
+          setIsEditModalOpen(true);
+        }}
+      />
+
       <EditDestinationModal
         isOpen={isEditModalOpen}
         onClose={() => setIsEditModalOpen(false)}
         onSave={handleEditDestination}
         onClear={() => editingDestination && handleClearNode(editingDestination.id)}
         destination={editingDestination}
+        stepIndex={isSelectLocationOpen ? undefined : (editingDestination && (editingDestination as any).isEmpty ? 2 : undefined)}
+        totalSteps={isSelectLocationOpen ? undefined : (editingDestination && (editingDestination as any).isEmpty ? 2 : undefined)}
       />
 
       {userPreferences && (

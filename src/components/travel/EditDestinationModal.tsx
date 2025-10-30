@@ -10,6 +10,8 @@ interface EditDestinationModalProps {
   onDelete?: () => void;
   onClear?: () => void; // New prop for "Tøm node"
   destination: Destination | null;
+  stepIndex?: number; // optional stepper support
+  totalSteps?: number;
 }
 
 const emojiOptions = [
@@ -35,7 +37,9 @@ export default function EditDestinationModal({
   onSave, 
   onDelete,
   onClear,
-  destination 
+  destination,
+  stepIndex,
+  totalSteps,
 }: EditDestinationModalProps) {
   const [label, setLabel] = useState('');
   const [selectedEmoji, setSelectedEmoji] = useState('📍');
@@ -150,6 +154,20 @@ export default function EditDestinationModal({
                 <X className="w-5 h-5 text-gray-500" />
               </button>
             </div>
+
+            {/* Optional stepper (dots) */}
+            {stepIndex && totalSteps && (
+              <div className="px-6 mt-3">
+                <div className="flex items-center gap-1 select-none mb-1">
+                  {Array.from({ length: totalSteps }).map((_, i) => (
+                    <span
+                      key={i}
+                      className={`${i < stepIndex ? 'bg-blue-500' : 'bg-gray-300'} w-2.5 h-2.5 rounded-full`}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Form */}
             <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto">
