@@ -359,11 +359,35 @@ export default function App() {
                 deletingNodeId={deletingNodeId}
                 isEditMode={isEditMode}
                 onNodeMove={(nodeId, newPosition) => {
-                  setDestinations(prev => prev.map(d => 
-                    d.id === nodeId 
-                      ? { ...d, position: newPosition }
-                      : d
-                  ));
+                  setDestinations(prev => {
+                    // In edit mode, we're swapping positions, so we need to update the angle
+                    // The computedAngles will handle the visual positioning
+                    return prev.map(d => 
+                      d.id === nodeId 
+                        ? { ...d, position: newPosition }
+                        : d
+                    );
+                  });
+                }}
+                onNodeSwap={(nodeId1, nodeId2) => {
+                  // Swap the order of nodes in the array to maintain defined positions
+                  setDestinations(prev => {
+                    const centerNode = prev.find(d => d.isCenter);
+                    const otherNodes = prev.filter(d => !d.isCenter);
+                    
+                    const index1 = otherNodes.findIndex(d => d.id === nodeId1);
+                    const index2 = otherNodes.findIndex(d => d.id === nodeId2);
+                    
+                    if (index1 === -1 || index2 === -1) return prev;
+                    
+                    // Swap nodes in array
+                    const newOtherNodes = [...otherNodes];
+                    [newOtherNodes[index1], newOtherNodes[index2]] = [newOtherNodes[index2], newOtherNodes[index1]];
+                    
+                    return centerNode 
+                      ? [centerNode, ...newOtherNodes]
+                      : newOtherNodes;
+                  });
                 }}
                 onNodeDelete={(nodeId) => handleDeleteDestination(nodeId)}
                 onEditModeToggle={() => setIsEditMode(!isEditMode)}

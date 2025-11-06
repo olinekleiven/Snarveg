@@ -16,6 +16,7 @@ interface NavigationWheelProps {
   deletingNodeId?: string | null; // ID of node currently being deleted
   isEditMode?: boolean; // Whether edit mode is active
   onNodeMove?: (nodeId: string, newPosition: { angle: number; radius: number }) => void; // Callback when node is moved
+  onNodeSwap?: (nodeId1: string, nodeId2: string) => void; // Callback when two nodes swap positions
   onNodeDelete?: (nodeId: string) => void; // Callback when node delete button is clicked
   onEditModeToggle?: () => void; // Callback to toggle edit mode
 }
@@ -30,6 +31,7 @@ export default function NavigationWheel({
   deletingNodeId = null,
   isEditMode = false,
   onNodeMove,
+  onNodeSwap,
   onNodeDelete,
   onEditModeToggle,
 }: NavigationWheelProps) {
@@ -61,6 +63,8 @@ export default function NavigationWheel({
   const [draggingNodeId, setDraggingNodeId] = useState<string | null>(null);
   const [dragStartPos, setDragStartPos] = useState<{ x: number; y: number } | null>(null);
   const [dragStartAngle, setDragStartAngle] = useState<number | null>(null);
+  const [hoveredSwapNodeId, setHoveredSwapNodeId] = useState<string | null>(null);
+  const [swapAnimation, setSwapAnimation] = useState<{ from: string; to: string } | null>(null);
 
   const centerNode = destinations.find(d => d.isCenter);
   const otherNodes = destinations.filter(d => !d.isCenter);
@@ -170,8 +174,10 @@ export default function NavigationWheel({
         setDragStartPos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
         setDragStartAngle(angle);
         
-        // Set pointer capture for smooth dragging
-        (e.target as HTMLElement).setPointerCapture(e.pointerId);
+        // Set pointer capture on the container for smooth dragging
+        if (containerRef.current) {
+          containerRef.current.setPointerCapture(e.pointerId);
+        }
       }
       return;
     }
@@ -325,7 +331,7 @@ export default function NavigationWheel({
   };
 
   const handlePointerMove = (e: React.PointerEvent) => {
-    // Handle drag-and-drop in edit mode
+    // Handle drag-and-drop in edit mode - only allow swapping, not free movement
     if (isEditMode && draggingNodeId && dragStartPos && dragStartAngle !== null && containerRef.current) {
       const rect = containerRef.current.getBoundingClientRect();
       const centerX = rect.width / 2;
@@ -333,21 +339,30 @@ export default function NavigationWheel({
       const mouseX = e.clientX - rect.left;
       const mouseY = e.clientY - rect.top;
       
-      // Calculate angle from center to mouse position
-      const dx = mouseX - centerX;
-      const dy = mouseY - centerY;
-      const angle = (Math.atan2(dy, dx) * 180) / Math.PI;
-      
-      // Update node position
-      if (onNodeMove) {
-        const dest = destinations.find(d => d.id === draggingNodeId);
-        if (dest) {
-          onNodeMove(draggingNodeId, {
-            angle: angle,
-            radius: dest.position.radius,
-          });
+      // Check if hovering over another node to swap positions
+      const hoveredDest = otherNodes.find(dest => {
+        if (dest.id === draggingNodeId || dest.isCenter || dest.isEmpty || dest.label === 'Legg til sted') {
+          return false;
         }
+        // Use computed angle to find the node's defined position
+        const angle = computedAngles.get(dest.id) ?? dest.position.angle;
+        const pos = getNodePosition(angle, dest.position.radius);
+        const nodeScreenX = centerX + pos.x;
+        const nodeScreenY = centerY + pos.y;
+        
+        const dx = mouseX - nodeScreenX;
+        const dy = mouseY - nodeScreenY;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        
+        return distance < 50; // 50px hit radius
+      });
+      
+      if (hoveredDest) {
+        setHoveredSwapNodeId(hoveredDest.id);
+      } else {
+        setHoveredSwapNodeId(null);
       }
+      // Don't allow free movement - only swapping is allowed
       return;
     }
     
@@ -477,14 +492,40 @@ export default function NavigationWheel({
   const handlePointerUp = (e: React.PointerEvent) => {
     // Handle drag-and-drop end in edit mode
     if (isEditMode) {
+      // If we were dragging and hovering over another node, swap positions
+      if (draggingNodeId && hoveredSwapNodeId) {
+        const draggingNode = destinations.find(d => d.id === draggingNodeId);
+        const swapNode = destinations.find(d => d.id === hoveredSwapNodeId);
+        
+        if (draggingNode && swapNode && onNodeSwap) {
+          // Trigger swap animation
+          setSwapAnimation({ from: draggingNodeId, to: hoveredSwapNodeId });
+          
+          // Swap the nodes in the array (this maintains defined positions)
+          onNodeSwap(draggingNodeId, hoveredSwapNodeId);
+          
+          // Provide haptic feedback
+          if (navigator.vibrate) {
+            navigator.vibrate(100);
+          }
+          
+          // Clear animation after a short delay
+          setTimeout(() => {
+            setSwapAnimation(null);
+          }, 300);
+        }
+        
+        setHoveredSwapNodeId(null);
+      }
+      
       // If we were dragging, end the drag
       if (draggingNodeId) {
         setDraggingNodeId(null);
         setDragStartPos(null);
         setDragStartAngle(null);
         // Release pointer capture
-        if (e.target instanceof HTMLElement) {
-          e.target.releasePointerCapture(e.pointerId);
+        if (containerRef.current) {
+          containerRef.current.releasePointerCapture(e.pointerId);
         }
       }
       
@@ -858,9 +899,16 @@ export default function NavigationWheel({
         {/* Surrounding nodes */}
         <AnimatePresence mode="popLayout">
           {otherNodes.map(dest => {
-            // Get the computed angle for rendering (falls back to stored angle).
+            // Always use computed angle for defined positions
+            // In edit mode, we swap positions but still use computed angles
             const angle = computedAngles.get(dest.id) ?? dest.position.angle;
             const pos = getNodePosition(angle, dest.position.radius);
+            
+            // Check if this node is part of a swap animation
+            const isSwapping = swapAnimation && (
+              swapAnimation.from === dest.id || 
+              swapAnimation.to === dest.id
+            );
             const isInRoute = connections
               .filter(c => c.isLocked)
               .some(c => c.from === dest.id || c.to === dest.id);
@@ -878,7 +926,10 @@ export default function NavigationWheel({
                   y: pos.y - 40,
                 }}
                 initial={{ scale: 0, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
+                animate={{ 
+                  scale: isSwapping ? 1.2 : 1, 
+                  opacity: 1,
+                }}
                 exit={{ 
                   scale: 0,
                   opacity: 0,
@@ -895,8 +946,17 @@ export default function NavigationWheel({
               >
                 <DestinationNode
                   destination={dest}
-                  isSelected={drawStart?.id === dest.id || isInRoute}
-                  isHovered={hoveredNode === dest.id}
+                  isSelected={
+                    drawStart?.id === dest.id || 
+                    isInRoute || 
+                    (isEditMode && hoveredSwapNodeId === dest.id) ||
+                    (isEditMode && draggingNodeId === dest.id)
+                  }
+                  isHovered={
+                    hoveredNode === dest.id || 
+                    (isEditMode && hoveredSwapNodeId === dest.id) ||
+                    (isEditMode && draggingNodeId === dest.id)
+                  }
                   onPointerDown={(e) => handlePointerDown(e, dest.id)}
                   onContextMenu={(e) => handleContextMenu(e, dest.id)}
                   isDrawable={canNodeStartDrawing(dest.id).allowed && !isDisabled}
@@ -911,6 +971,26 @@ export default function NavigationWheel({
                     }
                   }}
                 />
+                
+                {/* Swap indicator - shows when hovering over a node to swap */}
+                {isEditMode && hoveredSwapNodeId === dest.id && draggingNodeId && draggingNodeId !== dest.id && (
+                  <motion.div
+                    className="absolute inset-0 rounded-full border-4 border-blue-500 pointer-events-none"
+                    initial={{ scale: 0.8, opacity: 0 }}
+                    animate={{ scale: 1.1, opacity: 1 }}
+                    exit={{ scale: 0.8, opacity: 0 }}
+                    transition={{ 
+                      type: 'spring', 
+                      stiffness: 300, 
+                      damping: 20,
+                      repeat: Infinity,
+                      repeatType: 'reverse'
+                    }}
+                    style={{
+                      boxShadow: '0 0 20px rgba(59, 130, 246, 0.6)',
+                    }}
+                  />
+                )}
               </motion.div>
             );
           })}
