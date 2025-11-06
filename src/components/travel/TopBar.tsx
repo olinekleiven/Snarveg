@@ -15,7 +15,7 @@ export default function TopBar({
   onResetRoute, 
   hasConnections = false,
   onBackClick,
-  showBackButton = false 
+  showBackButton = false
 }: TopBarProps) {
   return (
     <motion.header 

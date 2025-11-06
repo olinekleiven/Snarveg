@@ -43,6 +43,7 @@ export default function App() {
   const [currentRoute, setCurrentRoute] = useState(null);
   const [hasActiveTicket, setHasActiveTicket] = useState(false);
   const [deletingNodeId, setDeletingNodeId] = useState<string | null>(null);
+  const [isEditMode, setIsEditMode] = useState(false);
   
   // Maximum number of destinations (excluding center)
   const MAX_DESTINATIONS = 20;
@@ -356,6 +357,16 @@ export default function App() {
                 onNodeClick={handleNodeClick}
                 maxDestinations={MAX_DESTINATIONS}
                 deletingNodeId={deletingNodeId}
+                isEditMode={isEditMode}
+                onNodeMove={(nodeId, newPosition) => {
+                  setDestinations(prev => prev.map(d => 
+                    d.id === nodeId 
+                      ? { ...d, position: newPosition }
+                      : d
+                  ));
+                }}
+                onNodeDelete={(nodeId) => handleDeleteDestination(nodeId)}
+                onEditModeToggle={() => setIsEditMode(!isEditMode)}
               />
 
               {/* Action buttons - Show route button */}

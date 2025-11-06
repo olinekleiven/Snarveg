@@ -13,6 +13,8 @@ interface DestinationNodeProps {
   lockProgress?: number;
   isDisabled?: boolean;
   isDeleting?: boolean;
+  isEditMode?: boolean;
+  onDeleteClick?: (e: React.MouseEvent) => void;
 }
 
 export default function DestinationNode({
@@ -26,6 +28,8 @@ export default function DestinationNode({
   lockProgress = 0,
   isDisabled = false,
   isDeleting = false,
+  isEditMode = false,
+  onDeleteClick,
 }: DestinationNodeProps) {
   const [isPressed, setIsPressed] = useState(false);
   
@@ -167,6 +171,31 @@ export default function DestinationNode({
           <div className="text-2xl filter drop-shadow-sm">{destination.emoji}</div>
         )}
       </div>
+
+      {/* Delete button in edit mode */}
+      {isEditMode && !isCenter && !destination.isEmpty && destination.label !== 'Legg til sted' && (
+        <motion.button
+          onClick={(e) => {
+            e.stopPropagation();
+            onDeleteClick?.(e);
+          }}
+          className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-red-500 hover:bg-red-600 flex items-center justify-center text-white shadow-lg z-10"
+          whileHover={{ scale: 1.1 }}
+          whileTap={{ scale: 0.9 }}
+          initial={{ scale: 0 }}
+          animate={{ scale: 1 }}
+          transition={{ type: 'spring', stiffness: 300 }}
+        >
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+            <path
+              d="M9 3L3 9M3 3L9 9"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+            />
+          </svg>
+        </motion.button>
+      )}
 
       {/* Label */}
       <div className="absolute -bottom-7 left-1/2 -translate-x-1/2 whitespace-nowrap pointer-events-none">

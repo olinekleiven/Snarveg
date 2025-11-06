@@ -1,5 +1,6 @@
 import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { Edit, Check } from 'lucide-react';
 import DestinationNode from './DestinationNode';
 import DrawingLine from './DrawingLine';
 import { Destination, Connection } from './types';
@@ -13,6 +14,10 @@ interface NavigationWheelProps {
   onNodeClick?: (destination: Destination) => void;
   maxDestinations?: number; // Maximum number of destinations (excluding center)
   deletingNodeId?: string | null; // ID of node currently being deleted
+  isEditMode?: boolean; // Whether edit mode is active
+  onNodeMove?: (nodeId: string, newPosition: { angle: number; radius: number }) => void; // Callback when node is moved
+  onNodeDelete?: (nodeId: string) => void; // Callback when node delete button is clicked
+  onEditModeToggle?: () => void; // Callback to toggle edit mode
 }
 
 export default function NavigationWheel({
@@ -23,6 +28,10 @@ export default function NavigationWheel({
   onNodeClick,
   maxDestinations = 20,
   deletingNodeId = null,
+  isEditMode = false,
+  onNodeMove,
+  onNodeDelete,
+  onEditModeToggle,
 }: NavigationWheelProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
@@ -47,6 +56,11 @@ export default function NavigationWheel({
   const [chainedDrawing, setChainedDrawing] = useState(false);
   const [chainedFromNode, setChainedFromNode] = useState<string | null>(null);
   const currentMousePosRef = useRef<{ x: number; y: number } | null>(null);
+  
+  // Edit mode state
+  const [draggingNodeId, setDraggingNodeId] = useState<string | null>(null);
+  const [dragStartPos, setDragStartPos] = useState<{ x: number; y: number } | null>(null);
+  const [dragStartAngle, setDragStartAngle] = useState<number | null>(null);
 
   const centerNode = destinations.find(d => d.isCenter);
   const otherNodes = destinations.filter(d => !d.isCenter);
@@ -109,6 +123,60 @@ export default function NavigationWheel({
     const dest = destinations.find(d => d.id === nodeId);
     if (!dest) return;
     
+    // In edit mode, handle drag-and-drop or tap to edit
+    if (isEditMode) {
+      // Don't allow dragging center node or empty nodes
+      if (dest.isCenter || dest.isEmpty || dest.label === 'Legg til sted') {
+        // For empty nodes, still allow clicking to add
+        if ((dest.isEmpty || dest.label === 'Legg til sted') && onNodeClick) {
+          if (hasReachedMax) {
+            toast.error('Maks 20 destinasjoner', {
+              duration: 2500,
+              style: {
+                background: '#EF4444',
+                color: '#FFFFFF',
+                border: 'none',
+              },
+            });
+            if (navigator.vibrate) {
+              navigator.vibrate(100);
+            }
+            return;
+          }
+          onNodeClick(dest);
+          if (navigator.vibrate) {
+            navigator.vibrate(50);
+          }
+        }
+        // For center node, allow tap to edit
+        if (dest.isCenter && onNodeClick) {
+          onNodeClick(dest);
+          if (navigator.vibrate) {
+            navigator.vibrate(50);
+          }
+        }
+        return;
+      }
+      
+      // Store initial position for tap/drag detection
+      const rect = containerRef.current?.getBoundingClientRect();
+      if (rect) {
+        setPointerStartPos({ x: e.clientX, y: e.clientY });
+        setPointerDownNodeId(nodeId);
+        
+        // Start dragging immediately - tap detection happens on pointer up
+        const angle = computedAngles.get(nodeId) ?? dest.position.angle;
+        setDraggingNodeId(nodeId);
+        setDragStartPos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+        setDragStartAngle(angle);
+        
+        // Set pointer capture for smooth dragging
+        (e.target as HTMLElement).setPointerCapture(e.pointerId);
+      }
+      return;
+    }
+    
+    // Normal mode behavior (existing code)
     // If this is an empty node, check if we can add more
     if (dest.isEmpty || dest.label === 'Legg til sted') {
       // Check if we've reached the maximum limit
@@ -257,6 +325,32 @@ export default function NavigationWheel({
   };
 
   const handlePointerMove = (e: React.PointerEvent) => {
+    // Handle drag-and-drop in edit mode
+    if (isEditMode && draggingNodeId && dragStartPos && dragStartAngle !== null && containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect();
+      const centerX = rect.width / 2;
+      const centerY = rect.height / 2;
+      const mouseX = e.clientX - rect.left;
+      const mouseY = e.clientY - rect.top;
+      
+      // Calculate angle from center to mouse position
+      const dx = mouseX - centerX;
+      const dy = mouseY - centerY;
+      const angle = (Math.atan2(dy, dx) * 180) / Math.PI;
+      
+      // Update node position
+      if (onNodeMove) {
+        const dest = destinations.find(d => d.id === draggingNodeId);
+        if (dest) {
+          onNodeMove(draggingNodeId, {
+            angle: angle,
+            radius: dest.position.radius,
+          });
+        }
+      }
+      return;
+    }
+    
     // Cancel long-press if pointer moves significantly
     if (longPressTimer && pointerStartPos) {
       const dx = e.clientX - pointerStartPos.x;
@@ -381,6 +475,47 @@ export default function NavigationWheel({
   };
 
   const handlePointerUp = (e: React.PointerEvent) => {
+    // Handle drag-and-drop end in edit mode
+    if (isEditMode) {
+      // If we were dragging, end the drag
+      if (draggingNodeId) {
+        setDraggingNodeId(null);
+        setDragStartPos(null);
+        setDragStartAngle(null);
+        // Release pointer capture
+        if (e.target instanceof HTMLElement) {
+          e.target.releasePointerCapture(e.pointerId);
+        }
+      }
+      
+      // Check if this was a tap (not a drag) to open edit modal
+      if (pointerDownNodeId && pointerStartPos && !draggingNodeId) {
+        const dest = destinations.find(d => d.id === pointerDownNodeId);
+        if (dest && !dest.isCenter && !dest.isEmpty && dest.label !== 'Legg til sted') {
+          const dx = e.clientX - pointerStartPos.x;
+          const dy = e.clientY - pointerStartPos.y;
+          const distance = Math.sqrt(dx * dx + dy * dy);
+          
+          // If moved less than 10px, treat as tap
+          if (distance < 10 && onNodeClick) {
+            onNodeClick(dest);
+            if (navigator.vibrate) {
+              navigator.vibrate(50);
+            }
+          }
+        }
+      }
+      
+      // Clear timers
+      if (longPressTimer) {
+        clearTimeout(longPressTimer);
+        setLongPressTimer(null);
+      }
+      setPointerStartPos(null);
+      setPointerDownNodeId(null);
+      return;
+    }
+    
     // Clear long-press timer
     if (longPressTimer) {
       clearTimeout(longPressTimer);
@@ -715,6 +850,7 @@ export default function NavigationWheel({
               isCenter={true}
               isDrawable={canNodeStartDrawing(centerNode.id).allowed}
               lockProgress={hoveredNode === centerNode.id ? lockProgress : 0}
+              isEditMode={isEditMode}
             />
           </div>
         )}
@@ -767,6 +903,13 @@ export default function NavigationWheel({
                   lockProgress={hoveredNode === dest.id ? lockProgress : 0}
                   isDisabled={isDisabled}
                   isDeleting={isDeleting}
+                  isEditMode={isEditMode}
+                  onDeleteClick={(e) => {
+                    e.stopPropagation();
+                    if (onNodeDelete) {
+                      onNodeDelete(dest.id);
+                    }
+                  }}
                 />
               </motion.div>
             );
@@ -774,8 +917,22 @@ export default function NavigationWheel({
         </AnimatePresence>
       </div>
 
+      {/* Edit mode instruction box */}
+      {isEditMode && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -10 }}
+          className="absolute top-24 right-4 bg-orange-100 border-2 border-orange-300 rounded-xl px-4 py-2 shadow-lg z-50"
+        >
+          <p className="text-orange-800 text-sm font-medium">
+            Edit Mode: Drag to reorder, click X to delete
+          </p>
+        </motion.div>
+      )}
+
       {/* Hint text - simple version - moved to top */}
-      {connections.length === 0 && !isDrawing && (
+      {!isEditMode && connections.length === 0 && !isDrawing && (
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -808,6 +965,44 @@ export default function NavigationWheel({
           <p className="text-green-600 font-medium text-sm">✓ Legg til flere, eller trykk «Vis reiseplan»</p>
         </motion.div>
       )}
+
+      {/* Edit button - bottom left */}
+      {onEditModeToggle && (
+        <EditButton isEditMode={isEditMode} onToggle={onEditModeToggle} />
+      )}
     </div>
+  );
+}
+
+interface EditButtonProps {
+  isEditMode: boolean;
+  onToggle: () => void;
+}
+
+function EditButton({ isEditMode, onToggle }: EditButtonProps) {
+  return (
+    <motion.button
+      onClick={onToggle}
+      className={`fixed bottom-6 left-4 px-4 py-2 rounded-full flex items-center gap-2 font-medium transition-colors backdrop-blur-sm shadow-lg z-50 ${
+        isEditMode 
+          ? 'bg-orange-500 hover:bg-orange-600 text-white' 
+          : 'bg-white hover:bg-gray-50 text-gray-800 border-2 border-pink-200'
+      }`}
+      whileTap={{ scale: 0.95 }}
+      initial={{ y: 20, opacity: 0 }}
+      animate={{ y: 0, opacity: 1 }}
+    >
+      {isEditMode ? (
+        <>
+          <Check className="w-4 h-4" />
+          <span>Done</span>
+        </>
+      ) : (
+        <>
+          <Edit className="w-4 h-4" />
+          <span>Edit</span>
+        </>
+      )}
+    </motion.button>
   );
 }
