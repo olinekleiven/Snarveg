@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import DestinationNode from './DestinationNode';
 import DrawingLine from './DrawingLine';
@@ -50,6 +50,26 @@ export default function NavigationWheel({
 
   const centerNode = destinations.find(d => d.isCenter);
   const otherNodes = destinations.filter(d => !d.isCenter);
+
+  // Compute evenly spaced angles for the non-center nodes so they are
+  // distributed evenly around the wheel regardless of their initial values.
+  const computedAngles = useMemo(() => {
+    const map = new Map<string, number>();
+    const nodes = otherNodes;
+    const count = nodes.length;
+    if (count === 0) return map;
+
+    // Start at angle 0 (pointing to the right). You can change startAngle
+    // to -90 to start at the top if preferred.
+    const startAngle = 0;
+    const step = 360 / count;
+
+    nodes.forEach((node, idx) => {
+      map.set(node.id, startAngle + idx * step);
+    });
+
+    return map;
+  }, [otherNodes]);
   
   // Check if we've reached the maximum limit (count only filled destinations, not empty "+" nodes)
   const filledNodes = otherNodes.filter(d => !d.isEmpty);
@@ -73,8 +93,9 @@ export default function NavigationWheel({
     if (dest.isCenter) {
       return { x: centerX, y: centerY };
     }
-    
-    const pos = getNodePosition(dest.position.angle, dest.position.radius);
+  // Use computed angle when available so nodes are evenly spaced.
+  const angle = computedAngles.get(dest.id) ?? dest.position.angle;
+  const pos = getNodePosition(angle, dest.position.radius);
     return {
       x: centerX + pos.x,
       y: centerY + pos.y,
@@ -701,7 +722,9 @@ export default function NavigationWheel({
         {/* Surrounding nodes */}
         <AnimatePresence mode="popLayout">
           {otherNodes.map(dest => {
-            const pos = getNodePosition(dest.position.angle, dest.position.radius);
+            // Get the computed angle for rendering (falls back to stored angle).
+            const angle = computedAngles.get(dest.id) ?? dest.position.angle;
+            const pos = getNodePosition(angle, dest.position.radius);
             const isInRoute = connections
               .filter(c => c.isLocked)
               .some(c => c.from === dest.id || c.to === dest.id);
