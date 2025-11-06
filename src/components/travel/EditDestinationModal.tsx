@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, MapPin, Clock, FileText, Plus, Trash2 } from 'lucide-react';
+import { X, MapPin, FileText, Trash2 } from 'lucide-react';
 import { Destination } from './types';
 import {
   AlertDialog,
@@ -59,12 +59,13 @@ export default function EditDestinationModal({
   const [longitude, setLongitude] = useState('');
   const [notes, setNotes] = useState('');
   const [visitTime, setVisitTime] = useState('');
-  const [customFields, setCustomFields] = useState<Array<{ key: string; value: string }>>([]);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   useEffect(() => {
     if (destination) {
-      setLabel(destination.label);
+      // If destination is empty ("Legg til sted"), show empty label so placeholder is visible
+      const displayLabel = (destination.isEmpty || destination.label === 'Legg til sted') ? '' : destination.label;
+      setLabel(displayLabel);
       setSelectedEmoji(destination.emoji);
       setSelectedColor(destination.color);
       setAddress(destination.address || '');
@@ -72,26 +73,12 @@ export default function EditDestinationModal({
       setLongitude(destination.coordinates?.lng?.toString() || '');
       setNotes(destination.notes || '');
       setVisitTime(destination.visitTime || '');
-      
-      // Konverter customFields fra objekt til array
-      const fields = destination.customFields 
-        ? Object.entries(destination.customFields).map(([key, value]) => ({ key, value }))
-        : [];
-      setCustomFields(fields);
     }
   }, [destination]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!label.trim() || !destination) return;
-
-    // Konverter customFields tilbake til objekt
-    const customFieldsObject = customFields.reduce((acc, field) => {
-      if (field.key.trim()) {
-        acc[field.key.trim()] = field.value;
-      }
-      return acc;
-    }, {} as Record<string, string>);
 
     const updatedDestination: Destination = {
       ...destination,
@@ -105,26 +92,11 @@ export default function EditDestinationModal({
       } : undefined,
       notes: notes.trim() || undefined,
       visitTime: visitTime || undefined,
-      customFields: Object.keys(customFieldsObject).length > 0 ? customFieldsObject : undefined,
       isEmpty: false, // Node is no longer empty after being filled
     };
 
     onSave(updatedDestination);
     onClose();
-  };
-
-  const addCustomField = () => {
-    setCustomFields([...customFields, { key: '', value: '' }]);
-  };
-
-  const removeCustomField = (index: number) => {
-    setCustomFields(customFields.filter((_, i) => i !== index));
-  };
-
-  const updateCustomField = (index: number, field: 'key' | 'value', newValue: string) => {
-    const updated = [...customFields];
-    updated[index][field] = newValue;
-    setCustomFields(updated);
   };
 
   if (!destination) return null;
@@ -190,8 +162,8 @@ export default function EditDestinationModal({
                     type="text"
                     value={label}
                     onChange={(e) => setLabel(e.target.value)}
-                    placeholder="F.eks. Bryggen"
-                    className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                    placeholder={destination?.isEmpty || destination?.label === 'Legg til sted' ? 'Legg til sted' : 'F.eks. Bryggen'}
+                    className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all text-gray-900 placeholder:text-gray-400"
                     autoFocus
                   />
                 </div>
@@ -211,43 +183,6 @@ export default function EditDestinationModal({
                   </div>
                 </div>
 
-                {/* Coordinates */}
-                <div>
-                  <label className="block text-sm text-gray-600 mb-2">Koordinater (for API)</label>
-                  <div className="grid grid-cols-2 gap-3">
-                    <input
-                      type="number"
-                      step="any"
-                      value={latitude}
-                      onChange={(e) => setLatitude(e.target.value)}
-                      placeholder="Breddegrad"
-                      className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                    />
-                    <input
-                      type="number"
-                      step="any"
-                      value={longitude}
-                      onChange={(e) => setLongitude(e.target.value)}
-                      placeholder="Lengdegrad"
-                      className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                    />
-                  </div>
-                  <p className="text-xs text-gray-500 mt-1">Brukes for Google Maps API integrasjon</p>
-                </div>
-
-                {/* Visit time */}
-                <div>
-                  <label className="block text-sm text-gray-600 mb-2">Besøkstidspunkt</label>
-                  <div className="relative">
-                    <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                    <input
-                      type="time"
-                      value={visitTime}
-                      onChange={(e) => setVisitTime(e.target.value)}
-                      className="w-full pl-11 pr-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                    />
-                  </div>
-                </div>
 
                 {/* Notes */}
                 <div>
@@ -308,52 +243,6 @@ export default function EditDestinationModal({
                   </div>
                 </div>
 
-                {/* Custom fields */}
-                <div>
-                  <div className="flex items-center justify-between mb-3">
-                    <label className="block text-sm text-gray-600">Egendefinerte felt</label>
-                    <button
-                      type="button"
-                      onClick={addCustomField}
-                      className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700"
-                    >
-                      <Plus className="w-4 h-4" />
-                      Legg til felt
-                    </button>
-                  </div>
-                  <div className="space-y-2">
-                    {customFields.map((field, index) => (
-                      <div key={index} className="flex gap-2">
-                        <input
-                          type="text"
-                          value={field.key}
-                          onChange={(e) => updateCustomField(index, 'key', e.target.value)}
-                          placeholder="Feltnavn"
-                          className="flex-1 px-3 py-2 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                        />
-                        <input
-                          type="text"
-                          value={field.value}
-                          onChange={(e) => updateCustomField(index, 'value', e.target.value)}
-                          placeholder="Verdi"
-                          className="flex-1 px-3 py-2 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => removeCustomField(index)}
-                          className="w-9 h-9 flex items-center justify-center rounded-lg text-red-500 hover:bg-red-50"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    ))}
-                    {customFields.length === 0 && (
-                      <p className="text-xs text-gray-400 text-center py-2">
-                        Ingen tilleggsfelt lagt til
-                      </p>
-                    )}
-                  </div>
-                </div>
 
                 {/* Preview */}
                 <motion.div 
@@ -382,8 +271,8 @@ export default function EditDestinationModal({
 
             {/* Buttons - fixed at bottom */}
             <div className="border-t border-gray-100 p-6 bg-white space-y-3">
-              {/* Slett node button - only show if not center node */}
-              {onDelete && destination && !destination.isCenter && (
+              {/* Slett node button - only show if not center node and node is already saved (not a new empty node) */}
+              {onDelete && destination && !destination.isCenter && !destination.isEmpty && destination.label !== 'Legg til sted' && (
                 <button
                   type="button"
                   onClick={() => setShowDeleteConfirm(true)}
@@ -395,8 +284,8 @@ export default function EditDestinationModal({
               )}
               
               <div className="flex gap-3">
-                {/* "Tøm node" button - only show if node has content and is not the center node */}
-                {onClear && destination && !destination.isCenter && (
+                {/* "Tøm node" button - only show if node has content, is not the center node, and is already saved */}
+                {onClear && destination && !destination.isCenter && !destination.isEmpty && destination.label !== 'Legg til sted' && (
                   <button
                     type="button"
                     onClick={() => {
