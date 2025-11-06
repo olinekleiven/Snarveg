@@ -82,7 +82,7 @@ We are a small interdisciplinary team exploring AI-assisted design and developme
 
 5. **Always pull before starting new work:**
    ```bash
-   git pull
+   git push
    ```
    
 ---
