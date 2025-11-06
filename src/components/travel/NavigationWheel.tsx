@@ -11,6 +11,8 @@ interface NavigationWheelProps {
   onConnectionCreate: (from: string, to: string) => void;
   onConnectionLock: (from: string, to: string) => void;
   onNodeClick?: (destination: Destination) => void;
+  maxDestinations?: number; // Maximum number of destinations (excluding center)
+  deletingNodeId?: string | null; // ID of node currently being deleted
 }
 
 export default function NavigationWheel({
@@ -19,6 +21,8 @@ export default function NavigationWheel({
   onConnectionCreate,
   onConnectionLock,
   onNodeClick,
+  maxDestinations = 20,
+  deletingNodeId = null,
 }: NavigationWheelProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
@@ -46,6 +50,10 @@ export default function NavigationWheel({
 
   const centerNode = destinations.find(d => d.isCenter);
   const otherNodes = destinations.filter(d => !d.isCenter);
+  
+  // Check if we've reached the maximum limit (count only filled destinations, not empty "+" nodes)
+  const filledNodes = otherNodes.filter(d => !d.isEmpty);
+  const hasReachedMax = filledNodes.length >= maxDestinations;
 
   const getNodePosition = (angle: number, radius: number) => {
     const rad = (angle * Math.PI) / 180;
@@ -80,8 +88,24 @@ export default function NavigationWheel({
     const dest = destinations.find(d => d.id === nodeId);
     if (!dest) return;
     
-    // If this is an empty node, just open the modal immediately on click
+    // If this is an empty node, check if we can add more
     if (dest.isEmpty || dest.label === 'Legg til sted') {
+      // Check if we've reached the maximum limit
+      if (hasReachedMax) {
+        toast.error('Maks 20 destinasjoner', {
+          duration: 2500,
+          style: {
+            background: '#EF4444',
+            color: '#FFFFFF',
+            border: 'none',
+          },
+        });
+        if (navigator.vibrate) {
+          navigator.vibrate(100);
+        }
+        return;
+      }
+      
       if (onNodeClick) {
         onNodeClick(dest);
         if (navigator.vibrate) {
@@ -675,36 +699,56 @@ export default function NavigationWheel({
         )}
 
         {/* Surrounding nodes */}
-        {otherNodes.map(dest => {
-          const pos = getNodePosition(dest.position.angle, dest.position.radius);
-          const isInRoute = connections
-            .filter(c => c.isLocked)
-            .some(c => c.from === dest.id || c.to === dest.id);
+        <AnimatePresence mode="popLayout">
+          {otherNodes.map(dest => {
+            const pos = getNodePosition(dest.position.angle, dest.position.radius);
+            const isInRoute = connections
+              .filter(c => c.isLocked)
+              .some(c => c.from === dest.id || c.to === dest.id);
+            
+            // Check if this is an empty node and we've reached max
+            const isDisabled = (dest.isEmpty || dest.label === 'Legg til sted') && hasReachedMax;
+            const isDeleting = deletingNodeId === dest.id;
 
-          return (
-            <motion.div
-              key={dest.id}
-              className="absolute left-1/2 top-1/2"
-              style={{
-                x: pos.x - 40,
-                y: pos.y - 40,
-              }}
-              initial={{ scale: 0, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              transition={{ type: 'spring', stiffness: 260, damping: 20 }}
-            >
-              <DestinationNode
-                destination={dest}
-                isSelected={drawStart?.id === dest.id || isInRoute}
-                isHovered={hoveredNode === dest.id}
-                onPointerDown={(e) => handlePointerDown(e, dest.id)}
-                onContextMenu={(e) => handleContextMenu(e, dest.id)}
-                isDrawable={canNodeStartDrawing(dest.id).allowed}
-                lockProgress={hoveredNode === dest.id ? lockProgress : 0}
-              />
-            </motion.div>
-          );
-        })}
+            return (
+              <motion.div
+                key={dest.id}
+                className="absolute left-1/2 top-1/2"
+                style={{
+                  x: pos.x - 40,
+                  y: pos.y - 40,
+                }}
+                initial={{ scale: 0, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ 
+                  scale: 0,
+                  opacity: 0,
+                }}
+                transition={{ 
+                  type: 'spring', 
+                  stiffness: 260, 
+                  damping: 20,
+                  exit: {
+                    duration: 0.4,
+                    ease: "easeIn"
+                  }
+                }}
+              >
+                <DestinationNode
+                  destination={dest}
+                  isSelected={drawStart?.id === dest.id || isInRoute}
+                  isHovered={hoveredNode === dest.id}
+                  onPointerDown={(e) => handlePointerDown(e, dest.id)}
+                  onContextMenu={(e) => handleContextMenu(e, dest.id)}
+                  isDrawable={canNodeStartDrawing(dest.id).allowed && !isDisabled}
+                  lockProgress={hoveredNode === dest.id ? lockProgress : 0}
+                  isDisabled={isDisabled}
+                  isDeleting={isDeleting}
+                />
+              </motion.div>
+            );
+          })}
+        </AnimatePresence>
       </div>
 
       {/* Hint text - simple version - moved to top */}

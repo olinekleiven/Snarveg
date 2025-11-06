@@ -2,6 +2,16 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, MapPin, Clock, FileText, Plus, Trash2 } from 'lucide-react';
 import { Destination } from './types';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '../ui/alert-dialog';
 
 interface EditDestinationModalProps {
   isOpen: boolean;
@@ -50,6 +60,7 @@ export default function EditDestinationModal({
   const [notes, setNotes] = useState('');
   const [visitTime, setVisitTime] = useState('');
   const [customFields, setCustomFields] = useState<Array<{ key: string; value: string }>>([]);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   useEffect(() => {
     if (destination) {
@@ -370,20 +381,20 @@ export default function EditDestinationModal({
             </form>
 
             {/* Buttons - fixed at bottom */}
-            <div className="border-t border-gray-100 p-6 bg-white">
+            <div className="border-t border-gray-100 p-6 bg-white space-y-3">
+              {/* Slett node button - only show if not center node */}
+              {onDelete && destination && !destination.isCenter && (
+                <button
+                  type="button"
+                  onClick={() => setShowDeleteConfirm(true)}
+                  className="w-full px-6 py-3.5 rounded-xl border-2 border-red-300 bg-red-50 text-red-600 hover:bg-red-100 active:bg-red-200 transition-colors flex items-center justify-center gap-2 font-medium"
+                >
+                  <Trash2 className="w-5 h-5" />
+                  Slett node
+                </button>
+              )}
+              
               <div className="flex gap-3">
-                {onDelete && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onDelete();
-                      onClose();
-                    }}
-                    className="px-4 py-3.5 rounded-xl border border-red-200 text-red-600 active:bg-red-50 transition-colors"
-                  >
-                    <Trash2 className="w-5 h-5" />
-                  </button>
-                )}
                 {/* "Tøm node" button - only show if node has content and is not the center node */}
                 {onClear && destination && !destination.isCenter && (
                   <button
@@ -418,6 +429,49 @@ export default function EditDestinationModal({
           </motion.div>
         </>
       )}
+      
+      {/* Simple delete confirmation dialog */}
+      <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <AlertDialogContent className="max-w-sm p-6 bg-white border-2 border-gray-200 shadow-xl">
+          <div className="text-center space-y-4">
+            {/* Icon */}
+            <div className="flex justify-center">
+              <div className="w-14 h-14 rounded-full bg-red-100 flex items-center justify-center">
+                <Trash2 className="w-7 h-7 text-red-600" />
+              </div>
+            </div>
+            
+            {/* Title */}
+            <div>
+              <AlertDialogTitle className="text-lg font-semibold text-gray-900 mb-1">
+                Slett destinasjon?
+              </AlertDialogTitle>
+              <AlertDialogDescription className="text-sm text-gray-700">
+                Denne handlingen kan ikke angres.
+              </AlertDialogDescription>
+            </div>
+          </div>
+          
+          {/* Buttons */}
+          <div className="mt-6 flex gap-3">
+            <AlertDialogCancel className="flex-1 bg-white border-2 border-gray-300 text-gray-700 hover:bg-gray-50 font-medium">
+              Avbryt
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (onDelete) {
+                  onDelete();
+                  onClose();
+                }
+                setShowDeleteConfirm(false);
+              }}
+              className="flex-1 bg-red-600 hover:bg-red-700 text-white font-semibold"
+            >
+              Slett
+            </AlertDialogAction>
+          </div>
+        </AlertDialogContent>
+      </AlertDialog>
     </AnimatePresence>
   );
 }

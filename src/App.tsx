@@ -17,7 +17,8 @@ import {
   connectionExists,
   hasOutgoingConnection,
   rebuildConnectionsFromOrder,
-  checkActiveTicket
+  checkActiveTicket,
+  recalculateNodePositions
 } from './utils/helpers';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -41,6 +42,10 @@ export default function App() {
   const [viewMode, setViewMode] = useState('wheel');
   const [currentRoute, setCurrentRoute] = useState(null);
   const [hasActiveTicket, setHasActiveTicket] = useState(false);
+  const [deletingNodeId, setDeletingNodeId] = useState<string | null>(null);
+  
+  // Maximum number of destinations (excluding center)
+  const MAX_DESTINATIONS = 20;
 
   // Check if user has completed onboarding
   useEffect(() => {
@@ -130,18 +135,130 @@ export default function App() {
   };
 
   const handleEditDestination = (destination: Destination) => {
-    setDestinations(prev => prev.map(d => d.id === destination.id ? destination : d));
+    setDestinations(prev => {
+      // Check if this was an empty "+" node being filled
+      const wasEmpty = prev.find(d => d.id === destination.id)?.isEmpty;
+      
+      // Update the destination
+      let updated = prev.map(d => d.id === destination.id ? {
+        ...destination,
+        isEmpty: false, // Remove empty flag when destination is filled
+      } : d);
+      
+      // If we filled an empty node, check if we need to add a new "+" node
+      if (wasEmpty) {
+        const otherNodes = updated.filter(d => !d.isCenter);
+        const filledNodes = otherNodes.filter(d => !d.isEmpty);
+        const hasEmptyNode = otherNodes.some(d => d.isEmpty);
+        
+        // Only add a new "+" node if we haven't reached the maximum (count only filled nodes)
+        if (!hasEmptyNode && filledNodes.length < MAX_DESTINATIONS) {
+          // Generate a unique ID for the new empty node
+          const newId = `empty-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+          
+          // Add new empty node
+          const newEmptyNode: Destination = {
+            id: newId,
+            emoji: '+',
+            label: 'Legg til sted',
+            color: '#E5E7EB',
+            position: { angle: 0, radius: 140 }, // Will be recalculated
+            isEmpty: true,
+          };
+          
+          updated = [...updated, newEmptyNode];
+        }
+      }
+      
+      // Remove any empty nodes if we've reached the maximum
+      const otherNodesAfter = updated.filter(d => !d.isCenter);
+      const filledNodesAfter = otherNodesAfter.filter(d => !d.isEmpty);
+      if (filledNodesAfter.length >= MAX_DESTINATIONS) {
+        // Remove all empty nodes when max is reached
+        updated = updated.filter(d => d.isCenter || !d.isEmpty);
+      }
+      
+      // Recalculate positions for all nodes to be evenly distributed
+      updated = recalculateNodePositions(updated);
+      
+      return updated;
+    });
   };
 
   const handleClearNode = (destinationId: string) => {
-    // Reset node to empty state
-    setDestinations(prev => prev.map(d => 
-      d.id === destinationId 
-        ? { ...d, label: 'Legg til sted', emoji: '+', color: '#E5E7EB', address: undefined, coordinates: undefined, notes: undefined, isEmpty: true }
-        : d
-    ));
+    setDestinations(prev => {
+      // Reset node to empty state
+      let updated = prev.map(d => 
+        d.id === destinationId 
+          ? { ...d, label: 'Legg til sted', emoji: '+', color: '#E5E7EB', address: undefined, coordinates: undefined, notes: undefined, isEmpty: true }
+          : d
+      );
+      
+      // Recalculate positions for all nodes to be evenly distributed
+      updated = recalculateNodePositions(updated);
+      
+      return updated;
+    });
     // Remove any connections involving this node
     setConnections(prev => prev.filter(c => c.from !== destinationId && c.to !== destinationId));
+  };
+
+  const handleDeleteDestination = (destinationId: string) => {
+    // Don't allow deleting center node
+    const nodeToDelete = destinations.find(d => d.id === destinationId);
+    if (!nodeToDelete || nodeToDelete.isCenter) return;
+    
+    // Mark node for deletion (triggers visual feedback)
+    setDeletingNodeId(destinationId);
+    
+    // Remove any connections involving this node immediately
+    setConnections(prev => prev.filter(c => c.from !== destinationId && c.to !== destinationId));
+    
+    // Wait for animation to complete before removing the node
+    setTimeout(() => {
+      setDestinations(prev => {
+        // Remove the node
+        let updated = prev.filter(d => d.id !== destinationId);
+        
+        // Get other nodes (excluding center)
+        const otherNodes = updated.filter(d => !d.isCenter);
+        const filledNodes = otherNodes.filter(d => !d.isEmpty);
+        const hasEmptyNode = otherNodes.some(d => d.isEmpty);
+        
+        // If we deleted the last node, ensure at least one "+" node exists
+        if (otherNodes.length === 0) {
+          const newEmptyNode: Destination = {
+            id: `empty-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            emoji: '+',
+            label: 'Legg til sted',
+            color: '#E5E7EB',
+            position: { angle: 0, radius: 140 },
+            isEmpty: true,
+          };
+          updated = [...updated, newEmptyNode];
+        } 
+        // If we're under max and don't have an empty node, add one
+        else if (filledNodes.length < MAX_DESTINATIONS && !hasEmptyNode) {
+          const newEmptyNode: Destination = {
+            id: `empty-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            emoji: '+',
+            label: 'Legg til sted',
+            color: '#E5E7EB',
+            position: { angle: 0, radius: 140 },
+            isEmpty: true,
+          };
+          updated = [...updated, newEmptyNode];
+        }
+        
+        // Recalculate positions for all nodes to be evenly distributed
+        updated = recalculateNodePositions(updated);
+        
+        return updated;
+      });
+      
+      // Clear deleting state
+      setDeletingNodeId(null);
+    }, 500); // Animation duration
   };
 
   const handleNodeClick = (destination: Destination) => {
@@ -237,6 +354,8 @@ export default function App() {
                 onConnectionCreate={handleConnectionCreate}
                 onConnectionLock={handleConnectionLock}
                 onNodeClick={handleNodeClick}
+                maxDestinations={MAX_DESTINATIONS}
+                deletingNodeId={deletingNodeId}
               />
 
               {/* Action buttons - Show route button */}
@@ -334,6 +453,7 @@ export default function App() {
         onClose={() => setIsEditModalOpen(false)}
         onSave={handleEditDestination}
         onClear={() => editingDestination && handleClearNode(editingDestination.id)}
+        onDelete={() => editingDestination && handleDeleteDestination(editingDestination.id)}
         destination={editingDestination}
         stepIndex={isSelectLocationOpen ? undefined : (editingDestination && (editingDestination as any).isEmpty ? 2 : undefined)}
         totalSteps={isSelectLocationOpen ? undefined : (editingDestination && (editingDestination as any).isEmpty ? 2 : undefined)}

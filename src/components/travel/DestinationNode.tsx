@@ -11,6 +11,8 @@ interface DestinationNodeProps {
   isCenter?: boolean;
   isDrawable?: boolean;
   lockProgress?: number;
+  isDisabled?: boolean;
+  isDeleting?: boolean;
 }
 
 export default function DestinationNode({
@@ -22,6 +24,8 @@ export default function DestinationNode({
   isCenter = false,
   isDrawable = true,
   lockProgress = 0,
+  isDisabled = false,
+  isDeleting = false,
 }: DestinationNodeProps) {
   const [isPressed, setIsPressed] = useState(false);
   
@@ -44,8 +48,9 @@ export default function DestinationNode({
       whileHover={{ scale: isCenter ? 1 : 1.1 }}
       whileTap={{ scale: 0.95 }}
       animate={{
-        scale: isHovered ? 1.15 : 1,
-        rotate: isPressed ? [0, -5, 5, -5, 0] : 0,
+        scale: isDeleting ? 0.85 : (isHovered ? 1.15 : 1),
+        opacity: isDeleting ? 0.5 : 1,
+        rotate: isPressed && !isDeleting ? [0, -5, 5, -5, 0] : 0,
       }}
       transition={{ 
         type: 'spring', 
@@ -54,8 +59,25 @@ export default function DestinationNode({
         rotate: { duration: 0.3 }
       }}
     >
-      {/* Pulse effect when hovered */}
-      {isHovered && (
+      {/* Deletion indicator */}
+      {isDeleting && (
+        <motion.div
+          className="absolute inset-0 rounded-full border-2 border-red-500"
+          initial={{ scale: 1, opacity: 0 }}
+          animate={{ 
+            scale: [1, 1.1, 1],
+            opacity: [0.6, 0.8, 0.6],
+          }}
+          transition={{
+            duration: 0.5,
+            repeat: Infinity,
+            ease: "easeInOut"
+          }}
+        />
+      )}
+
+      {/* Pulse effect when hovered (but not when deleting) */}
+      {isHovered && !isDeleting && (
         <motion.div
           className="absolute inset-0 rounded-full"
           style={{
@@ -73,7 +95,7 @@ export default function DestinationNode({
       )}
 
       {/* Selection ring */}
-      {isSelected && !isHovered && (
+      {isSelected && !isHovered && !isDeleting && (
         <motion.div
           className="absolute inset-0 rounded-full border-3"
           style={{
@@ -115,9 +137,9 @@ export default function DestinationNode({
       <div
         className={`relative w-full h-full rounded-full shadow-xl flex flex-col items-center justify-center backdrop-blur-sm transition-all ${
           isCenter ? 'bg-gradient-to-br from-gray-700 to-gray-900' : ''
-        } ${!isDrawable ? 'opacity-40' : ''} ${
+        } ${!isDrawable || isDisabled ? 'opacity-40' : ''} ${
           destination.isEmpty ? 'bg-gray-100 border-2 border-dashed border-gray-300' : ''
-        }`}
+        } ${isDisabled ? 'cursor-not-allowed' : ''}`}
         style={{
           backgroundColor: isCenter || destination.isEmpty ? undefined : destination.color,
           boxShadow: isSelected || isHovered
@@ -140,7 +162,7 @@ export default function DestinationNode({
           </svg>
         ) : destination.isEmpty ? (
           // Show "+" icon for empty nodes
-          <div className="text-4xl font-light text-gray-500">+</div>
+          <div className={`text-4xl font-light ${isDisabled ? 'text-gray-400' : 'text-gray-500'}`}>+</div>
         ) : (
           <div className="text-2xl filter drop-shadow-sm">{destination.emoji}</div>
         )}
@@ -148,8 +170,10 @@ export default function DestinationNode({
 
       {/* Label */}
       <div className="absolute -bottom-7 left-1/2 -translate-x-1/2 whitespace-nowrap pointer-events-none">
-        <span className="text-xs text-gray-700 bg-white/90 backdrop-blur px-2 py-1 rounded-full shadow-sm">
-          {destination.label}
+        <span className={`text-xs bg-white/90 backdrop-blur px-2 py-1 rounded-full shadow-sm ${
+          isDisabled ? 'text-gray-400' : 'text-gray-700'
+        }`}>
+          {isDisabled && destination.isEmpty ? 'Maks 20 destinasjoner' : destination.label}
         </span>
       </div>
     </motion.div>

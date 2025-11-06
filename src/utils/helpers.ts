@@ -117,3 +117,55 @@ export function checkActiveTicket(): boolean {
     return false;
   }
 }
+
+/**
+ * Calculate evenly distributed positions around a circle
+ * @param count Number of nodes (excluding center)
+ * @param radius Radius from center in pixels
+ * @param startAngle Starting angle in degrees (default: 0)
+ * @returns Array of angle positions in degrees
+ */
+export function calculateEvenDistribution(
+  count: number,
+  radius: number = 140,
+  startAngle: number = 0
+): number[] {
+  if (count === 0) return [];
+  
+  const angles: number[] = [];
+  const angleStep = 360 / count;
+  
+  for (let i = 0; i < count; i++) {
+    angles.push((startAngle + i * angleStep) % 360);
+  }
+  
+  return angles;
+}
+
+/**
+ * Recalculate positions for all surrounding nodes to be evenly distributed
+ * @param destinations All destinations (including center)
+ * @param radius Radius from center in pixels
+ * @returns Updated destinations with recalculated positions
+ */
+export function recalculateNodePositions(
+  destinations: Destination[],
+  radius: number = 140
+): Destination[] {
+  const centerNode = destinations.find(d => d.isCenter);
+  const otherNodes = destinations.filter(d => !d.isCenter);
+  
+  if (otherNodes.length === 0) return destinations;
+  
+  const angles = calculateEvenDistribution(otherNodes.length, radius);
+  
+  const updatedNodes = otherNodes.map((node, index) => ({
+    ...node,
+    position: {
+      angle: angles[index],
+      radius: radius,
+    },
+  }));
+  
+  return centerNode ? [centerNode, ...updatedNodes] : updatedNodes;
+}
