@@ -25,7 +25,7 @@ We are a small interdisciplinary team exploring AI-assisted design and developme
 
    ### macOS / zsh quick-start
 
-   If you see "command not found: npm" (common on a fresh macOS setup), install Node.js first. We recommend using a Node version manager such as `volta` or `nvm`.
+   If you see "command not found: npm" (common on a fresh macOS setup), install Node.js first. We recommend using a Nodgit e version manager such as `volta` or `nvm`.
 
    - Install Volta (recommended):
 

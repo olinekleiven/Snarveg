@@ -1003,7 +1003,7 @@ export default function NavigationWheel({
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -10 }}
-          className="absolute top-24 right-4 bg-orange-100 border-2 border-orange-300 rounded-xl px-4 py-2 shadow-lg z-50"
+          className="absolute top-24 left-1/2 -translate-x-1/2 bg-orange-100 border-2 border-orange-300 rounded-xl px-4 py-2 shadow-lg z-50"
         >
           <p className="text-orange-800 text-sm font-medium">
             Edit Mode: Drag to reorder, click X to delete
@@ -1018,8 +1018,7 @@ export default function NavigationWheel({
           animate={{ opacity: 1 }}
           className="absolute top-24 left-1/2 -translate-x-1/2 text-center"
         >
-          <p className="text-gray-500 text-sm">Trekk frå <span className="font-medium">Min posisjon</span> til første stad</p>
-          <p className="text-gray-400 text-xs mt-1">Slepp eller hold inne for å låse</p>
+          <p className="text-gray-500 text-sm">Trekk linje fra din posisjon, til der du vil</p>
         </motion.div>
       )}
 
@@ -1046,10 +1045,17 @@ export default function NavigationWheel({
         </motion.div>
       )}
 
-      {/* Edit button - bottom left */}
-      {onEditModeToggle && (
-        <EditButton isEditMode={isEditMode} onToggle={onEditModeToggle} />
-      )}
+      {/* Edit button - bottom left - only show when no route is selected, no line is being drawn, and no line is active/recently drawn */}
+      <AnimatePresence>
+        {onEditModeToggle && 
+         !isDrawing && 
+         !chainedDrawing && 
+         !lockingConnection && 
+         connections.length === 0 && 
+         !carAnimation && (
+          <EditButton isEditMode={isEditMode} onToggle={onEditModeToggle} />
+        )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -1071,6 +1077,8 @@ function EditButton({ isEditMode, onToggle }: EditButtonProps) {
       whileTap={{ scale: 0.95 }}
       initial={{ y: 20, opacity: 0 }}
       animate={{ y: 0, opacity: 1 }}
+      exit={{ y: 20, opacity: 0 }}
+      transition={{ duration: 0.2 }}
     >
       {isEditMode ? (
         <>
