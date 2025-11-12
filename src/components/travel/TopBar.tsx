@@ -25,7 +25,7 @@ export default function TopBar({
     >
       <div className="px-4 flex flex-col items-center">
         <h1 className="text-5xl text-gray-900 tracking-tight text-center mb-2">Snarveg</h1>
-        <p className="text-sm text-gray-600 text-center">Smart reiseplanlegging</p>
+        <p className="text-sm text-gray-600 text-center">Fra A til B asap</p>
         
         {/* Back button - left side */}
         {showBackButton && onBackClick && (

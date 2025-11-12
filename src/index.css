@@ -2,6 +2,11 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  /* Line Y-calibration offset - adjust in devtools for live tuning (test 38, 40, 42) */
+  --line-y-cal: 40;
+}
+
 @layer base {
   * {
     @apply border-gray-200;

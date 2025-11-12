@@ -182,7 +182,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   };
 
   return (
-    <div className="fixed inset-0 bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 overflow-hidden">
+    <div className="fixed inset-0 bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 overflow-y-auto">
       {/* Animated background decoration */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <motion.div
@@ -212,7 +212,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
       </div>
 
       {/* Content */}
-      <div className="relative h-full flex flex-col p-6 pt-12 max-w-md mx-auto">
+      <div className="relative min-h-full flex flex-col p-6 pt-12 pb-6 max-w-md mx-auto">
         {/* Header */}
         <div className="mb-8">
           <motion.div

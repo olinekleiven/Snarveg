@@ -4,7 +4,7 @@ export const TRANSPORT_MODE_EMOJIS = ['🚶‍♂️', '🚌', '🚈', '🚲', '
 
 export const INITIAL_DESTINATIONS: Destination[] = [
   { id: 'home', emoji: '📍', label: 'Min posisjon', color: '#3B82F6', position: { angle: 0, radius: 0 }, isCenter: true },
-  { id: 'leiligheta', emoji: '🏠', label: 'Leiligheta', color: '#22C55E', position: { angle: 0, radius: 140 } },
+  { id: 'leiligheta', emoji: '🏠', label: 'Leiligheten', color: '#22C55E', position: { angle: 0, radius: 140 } },
   { id: 'trening', emoji: '💪', label: 'Trening', color: '#06B6D4', position: { angle: 72, radius: 140 } },
   { id: 'butikken', emoji: '🛍️', label: 'Butikken', color: '#3B82F6', position: { angle: 144, radius: 140 } },
   { id: 'biblioteket', emoji: '📚', label: 'Biblioteket', color: '#8B5CF6', position: { angle: 216, radius: 140 } },

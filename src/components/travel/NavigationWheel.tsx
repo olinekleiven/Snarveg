@@ -37,6 +37,14 @@ export default function NavigationWheel({
 }: NavigationWheelProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
+  const wheelContainerRef = useRef<HTMLDivElement>(null); // Ref for the wheel container (with pt-28)
+  
+  // LINE_Y_CAL brukes for visuell kalibrering av linjer (40px ned for perfekt sentrering).
+  // Endre verdien for å finjustere senterposisjon etter behov.
+  // Global Y-calibration offset for all line endpoints
+  // Adjusts all line start/end points downward to match visual node centers
+  // Can be tuned via CSS variable --line-y-cal for live adjustment in devtools
+  const LINE_Y_CAL = 40; // Endelig vertikal kalibrering for linjer (flytter alt 40px ned)
   
   const [isDrawing, setIsDrawing] = useState(false);
   const [drawStart, setDrawStart] = useState<{ id: string; x: number; y: number } | null>(null);
@@ -101,22 +109,52 @@ export default function NavigationWheel({
     };
   };
 
+  /**
+   * Get node screen position relative to container (for SVG coordinates)
+   * Uses same coordinate system as mouse events (e.clientX/Y - rect.left/top)
+   * All calculations use containerRef.getBoundingClientRect() for consistency
+   * 
+   * The wheel container has pt-28 (112px padding-top), and nodes are positioned
+   * relative to the wheel center within that container. This function calculates
+   * the actual screen position accounting for the container's coordinate system.
+   */
   const getNodeScreenPosition = (dest: Destination) => {
     if (!containerRef.current) return { x: 0, y: 0 };
     
-    const rect = containerRef.current.getBoundingClientRect();
-    const centerX = rect.width / 2;
-    const centerY = rect.height / 2;
+    // Use same rect as mouse move events - this is our single source of truth
+    // This rect represents the entire container (including padding area)
+    const containerRect = containerRef.current.getBoundingClientRect();
+    
+    // Get wheel container rect to calculate actual wheel center position
+    // The wheel container has pt-28 (112px) padding-top
+    let wheelCenterY: number;
+    if (wheelContainerRef.current) {
+      const wheelRect = wheelContainerRef.current.getBoundingClientRect();
+      // Wheel center is at the center of the wheel container (which accounts for pt-28)
+      // Convert to container-relative coordinates
+      wheelCenterY = wheelRect.top - containerRect.top + wheelRect.height / 2;
+    } else {
+      // Fallback: calculate based on known padding (datadriven from CSS pt-28 = 112px)
+      // This matches the visual layout where wheel is centered in remaining space after padding
+      const paddingTop = 112; // pt-28 = 112px (matches CSS class)
+      wheelCenterY = paddingTop + (containerRect.height - paddingTop) / 2;
+    }
+    
+    const centerX = containerRect.width / 2;
     
     if (dest.isCenter) {
-      return { x: centerX, y: centerY };
+      // Center node is at the wheel center
+      return { x: centerX, y: wheelCenterY };
     }
-  // Use computed angle when available so nodes are evenly spaced.
-  const angle = computedAngles.get(dest.id) ?? dest.position.angle;
-  const pos = getNodePosition(angle, dest.position.radius);
+    
+    // For other nodes: calculate position based on angle and radius
+    // Use computed angle when available so nodes are evenly spaced
+    const angle = computedAngles.get(dest.id) ?? dest.position.angle;
+    const pos = getNodePosition(angle, dest.position.radius);
+    
     return {
       x: centerX + pos.x,
-      y: centerY + pos.y,
+      y: wheelCenterY + pos.y,
     };
   };
 
@@ -255,10 +293,16 @@ export default function NavigationWheel({
       return;
     }
 
-    const pos = getNodeScreenPosition(dest);
+    // Get node position relative to container (for SVG coordinates)
+    // getNodeScreenPosition already returns coordinates relative to container
+    const nodePos = getNodeScreenPosition(dest);
+    
+    // Apply Y-calibration offset to line endpoints
+    const dy = Number(getComputedStyle(document.documentElement).getPropertyValue('--line-y-cal') || LINE_Y_CAL);
+    
     setIsDrawing(true);
-    setDrawStart({ id: nodeId, x: pos.x, y: pos.y });
-    setDrawCurrent({ x: pos.x, y: pos.y });
+    setDrawStart({ id: nodeId, x: nodePos.x, y: nodePos.y + dy });
+    setDrawCurrent({ x: nodePos.x, y: nodePos.y + dy });
   };
 
   // Helper function to check if a node can start a drawing
@@ -333,25 +377,22 @@ export default function NavigationWheel({
   const handlePointerMove = (e: React.PointerEvent) => {
     // Handle drag-and-drop in edit mode - only allow swapping, not free movement
     if (isEditMode && draggingNodeId && dragStartPos && dragStartAngle !== null && containerRef.current) {
+      // Use same rect as getNodeScreenPosition() for coordinate system consistency
       const rect = containerRef.current.getBoundingClientRect();
-      const centerX = rect.width / 2;
-      const centerY = rect.height / 2;
       const mouseX = e.clientX - rect.left;
       const mouseY = e.clientY - rect.top;
       
       // Check if hovering over another node to swap positions
+      // Use getNodeScreenPosition to get exact node position (includes correct offset)
       const hoveredDest = otherNodes.find(dest => {
         if (dest.id === draggingNodeId || dest.isCenter || dest.isEmpty || dest.label === 'Legg til sted') {
           return false;
         }
-        // Use computed angle to find the node's defined position
-        const angle = computedAngles.get(dest.id) ?? dest.position.angle;
-        const pos = getNodePosition(angle, dest.position.radius);
-        const nodeScreenX = centerX + pos.x;
-        const nodeScreenY = centerY + pos.y;
+        // Use getNodeScreenPosition to get exact node position with correct offset
+        const nodePos = getNodeScreenPosition(dest);
         
-        const dx = mouseX - nodeScreenX;
-        const dy = mouseY - nodeScreenY;
+        const dx = mouseX - nodePos.x;
+        const dy = mouseY - nodePos.y;
         const distance = Math.sqrt(dx * dx + dy * dy);
         
         return distance < 50; // 50px hit radius
@@ -382,15 +423,19 @@ export default function NavigationWheel({
     if ((!isDrawing && !chainedDrawing) || !containerRef.current || !drawStart) return;
 
     const rect = containerRef.current.getBoundingClientRect();
+    // Mouse position relative to container (matches SVG coordinate system)
     const mousePos = {
       x: e.clientX - rect.left,
       y: e.clientY - rect.top,
     };
     
-    // Store current mouse position for chained drawing
-    currentMousePosRef.current = mousePos;
+    // Apply Y-calibration offset to line endpoints
+    const dy = Number(getComputedStyle(document.documentElement).getPropertyValue('--line-y-cal') || LINE_Y_CAL);
     
-    setDrawCurrent(mousePos);
+    // Store current mouse position for chained drawing (with calibration)
+    currentMousePosRef.current = { x: mousePos.x, y: mousePos.y + dy };
+    
+    setDrawCurrent({ x: mousePos.x, y: mousePos.y + dy });
 
     // Check if hovering over a node
     const hoveredDest = destinations.find(dest => {
@@ -634,13 +679,17 @@ export default function NavigationWheel({
         
         // Update drawStart to the target node position
         const targetNodePos = getNodeScreenPosition(destinations.find(d => d.id === hoveredNode)!);
-        setDrawStart({ id: hoveredNode, ...targetNodePos });
         
-        // Keep drawCurrent at mouse position for immediate continuation
+        // Apply Y-calibration offset to line endpoints
+        const dy = Number(getComputedStyle(document.documentElement).getPropertyValue('--line-y-cal') || LINE_Y_CAL);
+        
+        setDrawStart({ id: hoveredNode, x: targetNodePos.x, y: targetNodePos.y + dy });
+        
+        // Keep drawCurrent at mouse position for immediate continuation (already calibrated)
         if (currentMousePosRef.current) {
           setDrawCurrent(currentMousePosRef.current);
         } else {
-          setDrawCurrent(targetNodePos);
+          setDrawCurrent({ x: targetNodePos.x, y: targetNodePos.y + dy });
         }
 
         setLockingConnection(null);
@@ -702,16 +751,16 @@ export default function NavigationWheel({
   return (
     <div 
       ref={containerRef} 
-      className="relative w-full h-full flex items-center justify-center overflow-hidden"
+      className="relative w-full h-full flex items-start justify-center overflow-hidden pt-28"
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
       onPointerCancel={handleCancel}
       onPointerLeave={handleCancel}
     >
       {/* Background decoration */}
-      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+      <div className="absolute inset-0 flex items-start justify-center pointer-events-none pt-28">
         <div className="w-[80vw] max-w-[400px] aspect-square rounded-full border-2 border-dashed border-gray-200 opacity-50" />
-        <div className="absolute w-[60vw] max-w-[280px] aspect-square rounded-full border border-gray-100" />
+        <div className="absolute w-[60vw] max-w-[280px] aspect-square rounded-full border border-gray-100" style={{ marginTop: 'calc(80vw * 0.1)' }} />
       </div>
 
       {/* Connection lines SVG */}
@@ -729,12 +778,15 @@ export default function NavigationWheel({
 
             const fromPos = getNodeScreenPosition(fromDest);
             const toPos = getNodeScreenPosition(toDest);
+            
+            // Apply Y-calibration offset to line endpoints
+            const dy = Number(getComputedStyle(document.documentElement).getPropertyValue('--line-y-cal') || LINE_Y_CAL);
 
             return (
               <DrawingLine
                 key={`connection-${conn.from}-${conn.to}-${idx}`}
-                from={fromPos}
-                to={toPos}
+                from={{ x: fromPos.x, y: fromPos.y + dy }}
+                to={{ x: toPos.x, y: toPos.y + dy }}
                 color={toDest.color}
                 isLocked={conn.isLocked}
               />
@@ -750,12 +802,15 @@ export default function NavigationWheel({
 
               const fromPos = getNodeScreenPosition(fromDest);
               const toPos = getNodeScreenPosition(toDest);
+              
+              // Apply Y-calibration offset to line endpoints
+              const dy = Number(getComputedStyle(document.documentElement).getPropertyValue('--line-y-cal') || LINE_Y_CAL);
 
               return (
                 <DrawingLine
                   key="locking"
-                  from={fromPos}
-                  to={toPos}
+                  from={{ x: fromPos.x, y: fromPos.y + dy }}
+                  to={{ x: toPos.x, y: toPos.y + dy }}
                   color={toDest.color}
                   isLocked={false}
                   lockProgress={lockProgress}
@@ -878,10 +933,15 @@ export default function NavigationWheel({
       </svg>
 
       {/* Navigation wheel */}
-      <div className="relative" style={{ zIndex: 10 }}>
+      <div ref={wheelContainerRef} className="relative pt-28" style={{ zIndex: 10 }}>
         {/* Center node */}
         {centerNode && (
-          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
+          <div 
+            className="absolute left-1/2 -translate-x-1/2 -translate-y-1/2"
+            style={{ 
+              top: 'calc(112px + (100% - 112px) / 2)'
+            }}
+          >
             <DestinationNode
               destination={centerNode}
               isSelected={drawStart?.id === centerNode.id}
@@ -920,10 +980,10 @@ export default function NavigationWheel({
             return (
               <motion.div
                 key={dest.id}
-                className="absolute left-1/2 top-1/2"
+                className="absolute left-1/2 top-0"
                 style={{
                   x: pos.x - 40,
-                  y: pos.y - 40,
+                  y: pos.y - 40 + 112, // Add offset to match new center position (pt-28 = 112px)
                 }}
                 initial={{ scale: 0, opacity: 0 }}
                 animate={{ 
@@ -1016,7 +1076,7 @@ export default function NavigationWheel({
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          className="absolute top-24 left-1/2 -translate-x-1/2 text-center"
+          className="absolute top-8 left-1/2 -translate-x-1/2 text-center"
         >
           <p className="text-gray-500 text-sm">Trekk linje fra din posisjon, til der du vil</p>
         </motion.div>
@@ -1034,16 +1094,16 @@ export default function NavigationWheel({
       )}
 
       {/* Progress hint - shows after first connection - moved to top */}
-      {connections.length > 0 && connections.length < 4 && !isDrawing && !lockingConnection && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className="absolute top-24 left-1/2 -translate-x-1/2 text-center"
-        >
-          <p className="text-green-600 font-medium text-sm">✓ Legg til flere, eller trykk «Vis reiseplan»</p>
-        </motion.div>
-      )}
+        {connections.length > 0 && connections.length < 4 && !isDrawing && !lockingConnection && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute top-8 left-1/2 -translate-x-1/2 text-center"
+          >
+            <p className="text-green-600 font-medium text-sm">✓ Legg til flere, eller trykk «Vis reiseplan»</p>
+          </motion.div>
+        )}
 
       {/* Edit button - bottom left - only show when no route is selected, no line is being drawn, and no line is active/recently drawn */}
       <AnimatePresence>

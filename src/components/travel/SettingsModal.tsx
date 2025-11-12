@@ -175,14 +175,14 @@ export default function SettingsModal({ isOpen, onClose, currentPreferences, onS
           className="bg-white w-full max-w-2xl max-h-[90vh] rounded-t-3xl sm:rounded-3xl overflow-hidden flex flex-col shadow-2xl"
         >
           {/* Header */}
-          <div className="sticky top-0 bg-gradient-to-br from-blue-500 via-indigo-600 to-purple-600 text-white p-6 flex items-center justify-between z-10">
-            <div>
-              <h2 className="text-2xl mb-1">Innstillinger</h2>
+          <div className="sticky top-0 bg-gradient-to-br from-blue-500 via-indigo-600 to-purple-600 text-white px-6 pt-6 pb-4 flex items-start justify-between z-10">
+            <div className="flex-1 pr-4">
+              <h2 className="text-2xl font-semibold mb-1">Innstillinger</h2>
               <p className="text-sm text-blue-100">Tilpass appen til dine preferanser</p>
             </div>
             <motion.button
               onClick={handleCancel}
-              className="w-10 h-10 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center hover:bg-white/30 transition-colors"
+              className="w-10 h-10 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center hover:bg-white/30 transition-colors flex-shrink-0"
               whileTap={{ scale: 0.9 }}
             >
               <X className="w-5 h-5" />
