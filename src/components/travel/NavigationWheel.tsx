@@ -1063,9 +1063,9 @@ export default function NavigationWheel({
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -10 }}
-          className="absolute top-24 left-1/2 -translate-x-1/2 bg-orange-100 border-2 border-orange-300 rounded-xl px-4 py-2 shadow-lg z-50"
+          className="absolute top-8 left-1/2 -translate-x-1/2 bg-orange-100 border-2 border-orange-300 rounded-xl px-3 py-1.5 shadow-lg z-50"
         >
-          <p className="text-orange-800 text-sm font-medium">
+          <p className="text-orange-800 text-xs font-medium">
             Edit Mode: Drag to reorder, click X to delete
           </p>
         </motion.div>
