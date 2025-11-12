@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import TopBar from './components/travel/TopBar';
 import NavigationWheel from './components/travel/NavigationWheel';
 import EditDestinationModal from './components/travel/EditDestinationModal';
@@ -10,7 +10,7 @@ import TicketButton from './components/travel/TicketButton';
 import TicketOverview from './components/travel/TicketOverview';
 import AnimatedBackground from './components/travel/AnimatedBackground';
 import { Destination, Route, Connection } from './components/travel/types';
-import { INITIAL_DESTINATIONS, TRANSPORT_MODE_EMOJIS, STORAGE_KEYS } from './utils/constants';
+import { INITIAL_DESTINATIONS, STORAGE_KEYS } from './utils/constants';
 import { 
   buildRouteFromConnections, 
   getRandomTransportMode,
@@ -32,21 +32,30 @@ export default function App() {
   const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(initialOnboardingState);
   const [userPreferences, setUserPreferences] = useState(initialPreferences);
   const [destinations, setDestinations] = useState(INITIAL_DESTINATIONS);
-  const [connections, setConnections] = useState([]);
+  const [connections, setConnections] = useState<Connection[]>([]);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isSelectLocationOpen, setIsSelectLocationOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isTicketOverviewOpen, setIsTicketOverviewOpen] = useState(false);
-  const [editingDestination, setEditingDestination] = useState(null);
-  const [pendingCoords, setPendingCoords] = useState<{ lat: number; lng: number } | null>(null);
-  const [viewMode, setViewMode] = useState('wheel');
-  const [currentRoute, setCurrentRoute] = useState(null);
+  const [editingDestination, setEditingDestination] = useState<Destination | null>(null);
+  const [viewMode, setViewMode] = useState<'wheel' | 'route'>('wheel');
+  const [currentRoute, setCurrentRoute] = useState<Route | null>(null);
   const [hasActiveTicket, setHasActiveTicket] = useState(false);
   const [deletingNodeId, setDeletingNodeId] = useState<string | null>(null);
   const [isEditMode, setIsEditMode] = useState(false);
   
   // Maximum number of destinations (excluding center)
   const MAX_DESTINATIONS = 20;
+  
+  // Helper function to create empty node
+  const createEmptyNode = (): Destination => ({
+    id: `empty-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+    emoji: '+',
+    label: 'Legg til sted',
+    color: '#E5E7EB',
+    position: { angle: 0, radius: 140 },
+    isEmpty: true,
+  });
 
   // Check if user has completed onboarding
   useEffect(() => {
@@ -91,15 +100,9 @@ export default function App() {
     localStorage.setItem(STORAGE_KEYS.PREFERENCES, JSON.stringify(preferences));
   };
 
-  const handlePurchaseTicket = (ticketType: string, duration: number, price: number) => {
+  const handlePurchaseTicket = (_ticketType: string, _duration: number, _price: number) => {
     setHasActiveTicket(true);
     // Modal will close automatically after purchase
-  };
-
-  const handlePreferencesUpdate = (preferences: UserPreferences) => {
-    setUserPreferences(preferences);
-    localStorage.setItem(STORAGE_KEYS.PREFERENCES, JSON.stringify(preferences));
-    console.log('Updated preferences:', preferences);
   };
 
   const handleConnectionCreate = (from: string, to: string) => {
@@ -154,20 +157,7 @@ export default function App() {
         
         // Only add a new "+" node if we haven't reached the maximum (count only filled nodes)
         if (!hasEmptyNode && filledNodes.length < MAX_DESTINATIONS) {
-          // Generate a unique ID for the new empty node
-          const newId = `empty-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-          
-          // Add new empty node
-          const newEmptyNode: Destination = {
-            id: newId,
-            emoji: '+',
-            label: 'Legg til sted',
-            color: '#E5E7EB',
-            position: { angle: 0, radius: 140 }, // Will be recalculated
-            isEmpty: true,
-          };
-          
-          updated = [...updated, newEmptyNode];
+          updated = [...updated, createEmptyNode()];
         }
       }
       
@@ -228,27 +218,11 @@ export default function App() {
         
         // If we deleted the last node, ensure at least one "+" node exists
         if (otherNodes.length === 0) {
-          const newEmptyNode: Destination = {
-            id: `empty-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-            emoji: '+',
-            label: 'Legg til sted',
-            color: '#E5E7EB',
-            position: { angle: 0, radius: 140 },
-            isEmpty: true,
-          };
-          updated = [...updated, newEmptyNode];
+          updated = [...updated, createEmptyNode()];
         } 
         // If we're under max and don't have an empty node, add one
         else if (filledNodes.length < MAX_DESTINATIONS && !hasEmptyNode) {
-          const newEmptyNode: Destination = {
-            id: `empty-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-            emoji: '+',
-            label: 'Legg til sted',
-            color: '#E5E7EB',
-            position: { angle: 0, radius: 140 },
-            isEmpty: true,
-          };
-          updated = [...updated, newEmptyNode];
+          updated = [...updated, createEmptyNode()];
         }
         
         // Recalculate positions for all nodes to be evenly distributed
@@ -264,7 +238,7 @@ export default function App() {
 
   const handleNodeClick = (destination: Destination) => {
     setEditingDestination(destination);
-    if ((destination as any).isEmpty || destination.label === 'Legg til sted') {
+    if (destination.isEmpty || destination.label === 'Legg til sted') {
       // Start at select-location step for empty nodes
       setIsSelectLocationOpen(true);
       return;
@@ -358,17 +332,6 @@ export default function App() {
                 maxDestinations={MAX_DESTINATIONS}
                 deletingNodeId={deletingNodeId}
                 isEditMode={isEditMode}
-                onNodeMove={(nodeId, newPosition) => {
-                  setDestinations(prev => {
-                    // In edit mode, we're swapping positions, so we need to update the angle
-                    // The computedAngles will handle the visual positioning
-                    return prev.map(d => 
-                      d.id === nodeId 
-                        ? { ...d, position: newPosition }
-                        : d
-                    );
-                  });
-                }}
                 onNodeSwap={(nodeId1, nodeId2) => {
                   // Swap the order of nodes in the array to maintain defined positions
                   setDestinations(prev => {
@@ -469,14 +432,12 @@ export default function App() {
         isOpen={isSelectLocationOpen}
         onClose={() => setIsSelectLocationOpen(false)}
         onNext={(coords) => {
-          setPendingCoords(coords);
           // Prefill coordinates on the destination and open edit step
           if (editingDestination) {
-            const prefilled: Destination = {
+            setEditingDestination({
               ...editingDestination,
               coordinates: coords,
-            } as Destination;
-            setEditingDestination(prefilled as any);
+            });
           }
           setIsSelectLocationOpen(false);
           setIsEditModalOpen(true);
@@ -490,8 +451,8 @@ export default function App() {
         onClear={() => editingDestination && handleClearNode(editingDestination.id)}
         onDelete={() => editingDestination && handleDeleteDestination(editingDestination.id)}
         destination={editingDestination}
-        stepIndex={isSelectLocationOpen ? undefined : (editingDestination && (editingDestination as any).isEmpty ? 2 : undefined)}
-        totalSteps={isSelectLocationOpen ? undefined : (editingDestination && (editingDestination as any).isEmpty ? 2 : undefined)}
+        stepIndex={isSelectLocationOpen ? undefined : (editingDestination?.isEmpty ? 2 : undefined)}
+        totalSteps={isSelectLocationOpen ? undefined : (editingDestination?.isEmpty ? 2 : undefined)}
       />
 
       {userPreferences && (

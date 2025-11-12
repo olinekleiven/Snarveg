@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, MapPin } from 'lucide-react';
 import { Destination } from './types';
@@ -9,13 +9,13 @@ interface AddDestinationModalProps {
   onAdd: (destination: Omit<Destination, 'id' | 'position'>) => void;
 }
 
-const emojiOptions = [
+const EMOJI_OPTIONS = [
   '🏛️', '☕', '🏖️', '🎵', '🌲', '🍽️', '🛍️', '🏨',
   '🎭', '🎨', '⛪', '🏰', '🎢', '🏃', '🎯', '📚',
   '🏥', '✈️', '🚇', '🎪', '🌆', '🗼', '🏞️', '⛰️'
-];
+] as const;
 
-const colorOptions = [
+const COLOR_OPTIONS = [
   { name: 'Purple', value: '#8B5CF6' },
   { name: 'Blue', value: '#3B82F6' },
   { name: 'Green', value: '#10B981' },
@@ -24,20 +24,24 @@ const colorOptions = [
   { name: 'Pink', value: '#EC4899' },
   { name: 'Cyan', value: '#06B6D4' },
   { name: 'Indigo', value: '#6366F1' },
-];
+] as const;
+
+const DEFAULT_EMOJI = '📍';
+const DEFAULT_COLOR = '#3B82F6';
 
 export default function AddDestinationModal({ isOpen, onClose, onAdd }: AddDestinationModalProps) {
   const [label, setLabel] = useState('');
-  const [selectedEmoji, setSelectedEmoji] = useState('📍');
-  const [selectedColor, setSelectedColor] = useState('#3B82F6');
+  const [selectedEmoji, setSelectedEmoji] = useState(DEFAULT_EMOJI);
+  const [selectedColor, setSelectedColor] = useState(DEFAULT_COLOR);
   const [address, setAddress] = useState('');
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = useCallback((e: React.FormEvent) => {
     e.preventDefault();
-    if (!label.trim()) return;
+    const trimmedLabel = label.trim();
+    if (!trimmedLabel) return;
 
     onAdd({
-      label: label.trim(),
+      label: trimmedLabel,
       emoji: selectedEmoji,
       color: selectedColor,
       address: address.trim() || undefined,
@@ -45,10 +49,29 @@ export default function AddDestinationModal({ isOpen, onClose, onAdd }: AddDesti
 
     // Reset form
     setLabel('');
-    setSelectedEmoji('📍');
-    setSelectedColor('#3B82F6');
+    setSelectedEmoji(DEFAULT_EMOJI);
+    setSelectedColor(DEFAULT_COLOR);
     setAddress('');
-  };
+  }, [label, selectedEmoji, selectedColor, address, onAdd]);
+
+  const isFormValid = useMemo(() => label.trim().length > 0, [label]);
+
+  const previewLabel = useMemo(() => label || 'Forhåndsvisning', [label]);
+
+  const previewBoxShadow = useMemo(
+    () => `0 10px 40px -10px ${selectedColor}60`,
+    [selectedColor]
+  );
+
+  const handleEmojiSelect = useCallback((e: React.MouseEvent<HTMLButtonElement>) => {
+    const emoji = e.currentTarget.dataset.emoji;
+    if (emoji) setSelectedEmoji(emoji);
+  }, []);
+
+  const handleColorSelect = useCallback((e: React.MouseEvent<HTMLButtonElement>) => {
+    const color = e.currentTarget.dataset.color;
+    if (color) setSelectedColor(color);
+  }, []);
 
   return (
     <AnimatePresence>
@@ -121,21 +144,25 @@ export default function AddDestinationModal({ isOpen, onClose, onAdd }: AddDesti
               <div>
                 <label className="block text-sm text-gray-600 mb-3">Velg ikon</label>
                 <div className="grid grid-cols-8 gap-2">
-                  {emojiOptions.map((emoji) => (
-                    <motion.button
-                      key={emoji}
-                      type="button"
-                      onClick={() => setSelectedEmoji(emoji)}
-                      className={`aspect-square rounded-xl flex items-center justify-center text-2xl transition-all ${
-                        selectedEmoji === emoji
-                          ? 'bg-blue-100 ring-2 ring-blue-500'
-                          : 'bg-gray-50 active:bg-gray-100'
-                      }`}
-                      whileTap={{ scale: 0.9 }}
-                    >
-                      {emoji}
-                    </motion.button>
-                  ))}
+                  {EMOJI_OPTIONS.map((emoji) => {
+                    const isSelected = selectedEmoji === emoji;
+                    return (
+                      <motion.button
+                        key={emoji}
+                        type="button"
+                        data-emoji={emoji}
+                        onClick={handleEmojiSelect}
+                        className={`aspect-square rounded-xl flex items-center justify-center text-2xl transition-all ${
+                          isSelected
+                            ? 'bg-blue-100 ring-2 ring-blue-500'
+                            : 'bg-gray-50 active:bg-gray-100'
+                        }`}
+                        whileTap={{ scale: 0.9 }}
+                      >
+                        {emoji}
+                      </motion.button>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -143,21 +170,25 @@ export default function AddDestinationModal({ isOpen, onClose, onAdd }: AddDesti
               <div>
                 <label className="block text-sm text-gray-600 mb-3">Velg farge</label>
                 <div className="grid grid-cols-8 gap-2">
-                  {colorOptions.map((color) => (
-                    <motion.button
-                      key={color.value}
-                      type="button"
-                      onClick={() => setSelectedColor(color.value)}
-                      className={`aspect-square rounded-full transition-all ${
-                        selectedColor === color.value
-                          ? 'ring-4 ring-offset-2 ring-gray-300'
-                          : ''
-                      }`}
-                      style={{ backgroundColor: color.value }}
-                      title={color.name}
-                      whileTap={{ scale: 0.9 }}
-                    />
-                  ))}
+                  {COLOR_OPTIONS.map((color) => {
+                    const isSelected = selectedColor === color.value;
+                    return (
+                      <motion.button
+                        key={color.value}
+                        type="button"
+                        data-color={color.value}
+                        onClick={handleColorSelect}
+                        className={`aspect-square rounded-full transition-all ${
+                          isSelected
+                            ? 'ring-4 ring-offset-2 ring-gray-300'
+                            : ''
+                        }`}
+                        style={{ backgroundColor: color.value }}
+                        title={color.name}
+                        whileTap={{ scale: 0.9 }}
+                      />
+                    );
+                  })}
                 </div>
               </div>
 
@@ -171,7 +202,7 @@ export default function AddDestinationModal({ isOpen, onClose, onAdd }: AddDesti
                     className="w-20 h-20 rounded-full mx-auto mb-3 flex items-center justify-center text-3xl shadow-lg bg-white border-3"
                     style={{
                       borderColor: selectedColor,
-                      boxShadow: `0 10px 40px -10px ${selectedColor}60`,
+                      boxShadow: previewBoxShadow,
                     }}
                     key={selectedEmoji + selectedColor}
                     initial={{ scale: 0.8 }}
@@ -180,7 +211,7 @@ export default function AddDestinationModal({ isOpen, onClose, onAdd }: AddDesti
                   >
                     {selectedEmoji}
                   </motion.div>
-                  <p className="text-sm text-gray-700">{label || 'Forhåndsvisning'}</p>
+                  <p className="text-sm text-gray-700">{previewLabel}</p>
                 </div>
               </motion.div>
 
@@ -195,7 +226,7 @@ export default function AddDestinationModal({ isOpen, onClose, onAdd }: AddDesti
                 </button>
                 <button
                   type="submit"
-                  disabled={!label.trim()}
+                  disabled={!isFormValid}
                   className="flex-1 px-6 py-3.5 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 text-white active:opacity-80 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg"
                 >
                   Legg til

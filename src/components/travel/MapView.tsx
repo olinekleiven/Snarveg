@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Navigation, Clock, TrendingUp, Zap, MapPin, X } from 'lucide-react';
 import { Route, Destination } from './types';
@@ -17,48 +17,103 @@ interface RouteSegment {
   distance: number;
 }
 
-export default function MapView({ route, destinations, onClose }: MapViewProps) {
+// Constants
+const MAP_SPACING = 80;
+const MAP_START_Y = 20;
+const MAP_X_POSITION = 50;
+const SEGMENT_ANIMATION_DELAY = 2000;
+const MARKER_ANIMATION_DURATION = 2;
+const PULSE_ANIMATION_DURATION = 2;
+const ROUTE_ANIMATION_DURATION = 1;
+
+// Animation constants
+const SPRING_TRANSITION = {
+  type: 'spring' as const,
+  damping: 30,
+  stiffness: 300,
+};
+
+const LINE_TRANSITION = {
+  duration: ROUTE_ANIMATION_DURATION,
+  ease: 'easeInOut' as const,
+};
+
+const PULSE_ANIMATION = {
+  scale: [1, 1.4, 1],
+  opacity: [0.3, 0, 0.3],
+};
+
+const PULSE_TRANSITION = {
+  duration: PULSE_ANIMATION_DURATION,
+  repeat: Infinity,
+};
+
+const BOUNCE_ANIMATION = { y: [0, -5, 0] };
+const BOUNCE_TRANSITION = {
+  duration: 1.5,
+  repeat: Infinity,
+};
+
+// Helper function to get map position (moved outside component)
+function getMapPosition(index: number) {
+  return {
+    x: MAP_X_POSITION,
+    y: MAP_START_Y + (index * MAP_SPACING),
+  };
+}
+
+function MapView({ route, destinations, onClose }: MapViewProps) {
   const [activeSegment, setActiveSegment] = useState(0);
   const [isAnimating, setIsAnimating] = useState(true);
   const [showRouteDetails, setShowRouteDetails] = useState(false);
 
-  const routeDestinations = route.destinations
-    .map(id => destinations.find(d => d.id === id))
-    .filter(Boolean) as Destination[];
+  // Memoize route destinations
+  const routeDestinations = useMemo(() => {
+    return route.destinations
+      .map(id => destinations.find(d => d.id === id))
+      .filter(Boolean) as Destination[];
+  }, [route.destinations, destinations]);
 
-  // Create route segments
-  const segments: RouteSegment[] = [];
-  for (let i = 0; i < routeDestinations.length - 1; i++) {
-    segments.push({
-      from: routeDestinations[i],
-      to: routeDestinations[i + 1],
-      transport: route.transportModes[i],
-      duration: Math.floor(route.totalTime / (routeDestinations.length - 1)),
-      distance: route.totalDistance / (routeDestinations.length - 1),
-    });
-  }
+  // Memoize route segments
+  const segments = useMemo(() => {
+    const segs: RouteSegment[] = [];
+    const segmentCount = routeDestinations.length - 1;
+    if (segmentCount <= 0) return segs;
+    
+    const segmentDuration = Math.floor(route.totalTime / segmentCount);
+    const segmentDistance = route.totalDistance / segmentCount;
+    
+    for (let i = 0; i < segmentCount; i++) {
+      segs.push({
+        from: routeDestinations[i],
+        to: routeDestinations[i + 1],
+        transport: route.transportModes[i],
+        duration: segmentDuration,
+        distance: segmentDistance,
+      });
+    }
+    return segs;
+  }, [routeDestinations, route.transportModes, route.totalTime, route.totalDistance]);
 
   // Animate through segments
   useEffect(() => {
     if (isAnimating && activeSegment < segments.length - 1) {
       const timer = setTimeout(() => {
         setActiveSegment(prev => prev + 1);
-      }, 2000);
+      }, SEGMENT_ANIMATION_DELAY);
       return () => clearTimeout(timer);
     } else if (activeSegment >= segments.length - 1) {
       setIsAnimating(false);
     }
   }, [activeSegment, isAnimating, segments.length]);
 
-  // Calculate positions for map visualization
-  const getMapPosition = (index: number, total: number) => {
-    const spacing = 80;
-    const startY = 20;
-    return {
-      x: 50,
-      y: startY + (index * spacing),
-    };
-  };
+  const handleShowDetails = useCallback(() => {
+    setShowRouteDetails(true);
+  }, []);
+
+  const handleCloseDetails = useCallback(() => {
+    setShowRouteDetails(false);
+  }, []);
 
   return (
     <div className="h-full flex flex-col bg-[#F5F3EE] relative overflow-hidden">
@@ -152,9 +207,9 @@ export default function MapView({ route, destinations, onClose }: MapViewProps) 
           </defs>
 
           {/* Route path */}
-          {segments.map((segment, index) => {
-            const fromPos = getMapPosition(index, segments.length);
-            const toPos = getMapPosition(index + 1, segments.length);
+          {segments.map((_, index) => {
+            const fromPos = getMapPosition(index);
+            const toPos = getMapPosition(index + 1);
             const isActive = index <= activeSegment;
             const isCurrent = index === activeSegment;
 
@@ -174,7 +229,7 @@ export default function MapView({ route, destinations, onClose }: MapViewProps) 
                     pathLength: isActive ? 1 : 0, 
                     opacity: isActive ? 0.9 : 0.2,
                   }}
-                  transition={{ duration: 1, ease: "easeInOut" }}
+                  transition={LINE_TRANSITION}
                 />
                 
                 {/* Route line */}
@@ -192,7 +247,7 @@ export default function MapView({ route, destinations, onClose }: MapViewProps) 
                     pathLength: isActive ? 1 : 0, 
                     opacity: isActive ? 1 : 0.4,
                   }}
-                  transition={{ duration: 1, ease: "easeInOut" }}
+                  transition={LINE_TRANSITION}
                   filter={isActive ? "url(#routeShadow)" : undefined}
                 />
 
@@ -212,7 +267,7 @@ export default function MapView({ route, destinations, onClose }: MapViewProps) 
                       offsetDistance: "100%",
                     }}
                     transition={{
-                      duration: 2,
+                      duration: MARKER_ANIMATION_DURATION,
                       repeat: Infinity,
                       ease: "linear",
                     }}
@@ -230,7 +285,7 @@ export default function MapView({ route, destinations, onClose }: MapViewProps) 
         {/* Destination markers */}
         <div className="absolute inset-0">
           {routeDestinations.map((dest, index) => {
-            const pos = getMapPosition(index, routeDestinations.length);
+            const pos = getMapPosition(index);
             const isActive = index <= activeSegment + 1;
             const isCurrent = index === activeSegment + 1;
             const isFirst = index === 0;
@@ -263,14 +318,8 @@ export default function MapView({ route, destinations, onClose }: MapViewProps) 
                       top: '50%',
                       transform: 'translate(-50%, -50%)',
                     }}
-                    animate={{
-                      scale: [1, 1.4, 1],
-                      opacity: [0.3, 0, 0.3],
-                    }}
-                    transition={{
-                      duration: 2,
-                      repeat: Infinity,
-                    }}
+                    animate={PULSE_ANIMATION}
+                    transition={PULSE_TRANSITION}
                   />
                 )}
 
@@ -280,8 +329,8 @@ export default function MapView({ route, destinations, onClose }: MapViewProps) 
                     {/* Red location pin for starting position */}
                     <motion.div
                       className="w-10 h-10 bg-red-500 rounded-full flex items-center justify-center shadow-lg border-4 border-white relative"
-                      animate={isCurrent ? { y: [0, -5, 0] } : {}}
-                      transition={{ duration: 1.5, repeat: Infinity }}
+                      animate={isCurrent ? BOUNCE_ANIMATION : {}}
+                      transition={isCurrent ? BOUNCE_TRANSITION : {}}
                     >
                       <div className="w-3 h-3 bg-white rounded-full"></div>
                     </motion.div>
@@ -361,7 +410,7 @@ export default function MapView({ route, destinations, onClose }: MapViewProps) 
       <div className="relative z-10 p-4 bg-white/95 backdrop-blur-sm border-t border-gray-200">
         <div className="flex gap-3">
           <button 
-            onClick={() => setShowRouteDetails(true)}
+            onClick={handleShowDetails}
             className="flex-1 py-3.5 bg-gray-100 text-gray-700 rounded-xl border border-gray-200 hover:bg-gray-200 transition-colors text-center"
           >
             Se detaljer
@@ -381,7 +430,7 @@ export default function MapView({ route, destinations, onClose }: MapViewProps) 
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              onClick={() => setShowRouteDetails(false)}
+              onClick={handleCloseDetails}
               className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[200]"
             />
             
@@ -390,7 +439,7 @@ export default function MapView({ route, destinations, onClose }: MapViewProps) 
               initial={{ y: '100%' }}
               animate={{ y: 0 }}
               exit={{ y: '100%' }}
-              transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+              transition={SPRING_TRANSITION}
               className="fixed bottom-0 left-0 right-0 bg-white rounded-t-3xl shadow-2xl z-[201] max-h-[75vh] overflow-hidden"
             >
               {/* Handle */}
@@ -414,7 +463,7 @@ export default function MapView({ route, destinations, onClose }: MapViewProps) 
                   </div>
                 </div>
                 <button
-                  onClick={() => setShowRouteDetails(false)}
+                  onClick={handleCloseDetails}
                   className="w-9 h-9 flex items-center justify-center rounded-full bg-gray-100 hover:bg-gray-200 transition-colors"
                 >
                   <X className="w-5 h-5 text-gray-600" />
@@ -428,7 +477,9 @@ export default function MapView({ route, destinations, onClose }: MapViewProps) 
                     const isFirst = index === 0;
                     const isLast = index === routeDestinations.length - 1;
                     const transportMode = !isLast ? route.transportModes[index] : null;
-                    const legTime = !isLast ? Math.floor(route.totalTime / (routeDestinations.length - 1)) : 0;
+                    const legTime = !isLast && routeDestinations.length > 1 
+                      ? Math.floor(route.totalTime / (routeDestinations.length - 1)) 
+                      : 0;
 
                     return (
                       <React.Fragment key={dest.id}>
@@ -513,3 +564,5 @@ export default function MapView({ route, destinations, onClose }: MapViewProps) 
     </div>
   );
 }
+
+export default React.memo(MapView);

@@ -12,8 +12,7 @@ En mobil reise- og navigasjonsapp med sirkulært navigasjonshjul og intelligente
 │   │   ├── /common                  # Felleskomponenter
 │   │   │   ├── AnimatedBackground.tsx
 │   │   │   ├── TopBar.tsx
-│   │   │   ├── ParticleEffect.tsx
-│   │   │   └── Confetti.tsx
+│   │   │   └── ParticleEffect.tsx
 │   │   ├── /navigation              # Navigasjonshjul og relatert
 │   │   │   ├── NavigationWheel.tsx
 │   │   │   ├── DestinationNode.tsx

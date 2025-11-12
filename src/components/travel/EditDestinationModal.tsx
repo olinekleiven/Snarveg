@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, MapPin, FileText, Trash2 } from 'lucide-react';
 import { Destination } from './types';
@@ -8,8 +8,6 @@ import {
   AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
   AlertDialogTitle,
 } from '../ui/alert-dialog';
 
@@ -24,13 +22,13 @@ interface EditDestinationModalProps {
   totalSteps?: number;
 }
 
-const emojiOptions = [
+const EMOJI_OPTIONS = [
   '🏛️', '☕', '🏖️', '🎵', '🌲', '🍽️', '🛍️', '🏨',
   '🎭', '🎨', '⛪', '🏰', '🎢', '🏃', '🎯', '📚',
   '🏥', '✈️', '🚇', '🎪', '🌆', '🗼', '🏞️', '⛰️'
-];
+] as const;
 
-const colorOptions = [
+const COLOR_OPTIONS = [
   { name: 'Purple', value: '#8B5CF6' },
   { name: 'Blue', value: '#3B82F6' },
   { name: 'Green', value: '#10B981' },
@@ -39,9 +37,24 @@ const colorOptions = [
   { name: 'Pink', value: '#EC4899' },
   { name: 'Cyan', value: '#06B6D4' },
   { name: 'Indigo', value: '#6366F1' },
-];
+] as const;
 
-export default function EditDestinationModal({ 
+const DEFAULT_EMOJI = '📍';
+const DEFAULT_COLOR = '#3B82F6';
+
+// Animation constants
+const SPRING_TRANSITION = {
+  type: 'spring' as const,
+  stiffness: 300,
+  damping: 30,
+};
+
+const PREVIEW_TRANSITION = {
+  type: 'spring' as const,
+  stiffness: 300,
+};
+
+function EditDestinationModal({ 
   isOpen, 
   onClose, 
   onSave, 
@@ -52,8 +65,8 @@ export default function EditDestinationModal({
   totalSteps,
 }: EditDestinationModalProps) {
   const [label, setLabel] = useState('');
-  const [selectedEmoji, setSelectedEmoji] = useState('📍');
-  const [selectedColor, setSelectedColor] = useState('#3B82F6');
+  const [selectedEmoji, setSelectedEmoji] = useState(DEFAULT_EMOJI);
+  const [selectedColor, setSelectedColor] = useState(DEFAULT_COLOR);
   const [address, setAddress] = useState('');
   const [latitude, setLatitude] = useState('');
   const [longitude, setLongitude] = useState('');
@@ -76,13 +89,16 @@ export default function EditDestinationModal({
     }
   }, [destination]);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!label.trim() || !destination) return;
+  const handleSubmit = useCallback((e?: React.FormEvent) => {
+    if (e) {
+      e.preventDefault();
+    }
+    const trimmedLabel = label.trim();
+    if (!trimmedLabel || !destination) return;
 
     const updatedDestination: Destination = {
       ...destination,
-      label: label.trim(),
+      label: trimmedLabel,
       emoji: selectedEmoji,
       color: selectedColor,
       address: address.trim() || undefined,
@@ -97,7 +113,47 @@ export default function EditDestinationModal({
 
     onSave(updatedDestination);
     onClose();
-  };
+  }, [label, selectedEmoji, selectedColor, address, latitude, longitude, notes, visitTime, destination, onSave, onClose]);
+
+  const isFormValid = useMemo(() => label.trim().length > 0, [label]);
+
+  const previewLabel = useMemo(() => label || 'Forhåndsvisning', [label]);
+
+  const previewBoxShadow = useMemo(
+    () => `0 10px 40px -10px ${selectedColor}60`,
+    [selectedColor]
+  );
+
+  const handleEmojiSelect = useCallback((e: React.MouseEvent<HTMLButtonElement>) => {
+    const emoji = e.currentTarget.dataset.emoji;
+    if (emoji) setSelectedEmoji(emoji);
+  }, []);
+
+  const handleColorSelect = useCallback((e: React.MouseEvent<HTMLButtonElement>) => {
+    const color = e.currentTarget.dataset.color;
+    if (color) setSelectedColor(color);
+  }, []);
+
+  const handleClearClick = useCallback(() => {
+    if (onClear) {
+      onClear();
+      onClose();
+    }
+  }, [onClear, onClose]);
+
+  const handleDeleteConfirm = useCallback(() => {
+    if (onDelete) {
+      onDelete();
+      onClose();
+    }
+    setShowDeleteConfirm(false);
+  }, [onDelete, onClose]);
+
+  // Memoize step dots array
+  const stepDots = useMemo(() => {
+    if (!totalSteps) return [];
+    return Array.from({ length: totalSteps });
+  }, [totalSteps]);
 
   if (!destination) return null;
 
@@ -120,7 +176,7 @@ export default function EditDestinationModal({
             initial={{ y: '100%' }}
             animate={{ y: 0 }}
             exit={{ y: '100%' }}
-            transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+            transition={SPRING_TRANSITION}
           >
             {/* Drag indicator */}
             <div className="flex justify-center pt-3 pb-2">
@@ -142,7 +198,7 @@ export default function EditDestinationModal({
             {stepIndex && totalSteps && (
               <div className="px-6 mt-3">
                 <div className="flex items-center gap-1 select-none mb-1">
-                  {Array.from({ length: totalSteps }).map((_, i) => (
+                  {stepDots.map((_, i) => (
                     <span
                       key={i}
                       className={`${i < stepIndex ? 'bg-blue-500' : 'bg-gray-300'} w-2.5 h-2.5 rounded-full`}
@@ -203,21 +259,25 @@ export default function EditDestinationModal({
                 <div>
                   <label className="block text-sm text-gray-600 mb-3">Velg ikon</label>
                   <div className="grid grid-cols-8 gap-2">
-                    {emojiOptions.map((emoji) => (
-                      <motion.button
-                        key={emoji}
-                        type="button"
-                        onClick={() => setSelectedEmoji(emoji)}
-                        className={`aspect-square rounded-xl flex items-center justify-center text-2xl transition-all ${
-                          selectedEmoji === emoji
-                            ? 'bg-blue-100 ring-2 ring-blue-500'
-                            : 'bg-gray-50 active:bg-gray-100'
-                        }`}
-                        whileTap={{ scale: 0.9 }}
-                      >
-                        {emoji}
-                      </motion.button>
-                    ))}
+                    {EMOJI_OPTIONS.map((emoji) => {
+                      const isSelected = selectedEmoji === emoji;
+                      return (
+                        <motion.button
+                          key={emoji}
+                          type="button"
+                          data-emoji={emoji}
+                          onClick={handleEmojiSelect}
+                          className={`aspect-square rounded-xl flex items-center justify-center text-2xl transition-all ${
+                            isSelected
+                              ? 'bg-blue-100 ring-2 ring-blue-500'
+                              : 'bg-gray-50 active:bg-gray-100'
+                          }`}
+                          whileTap={{ scale: 0.9 }}
+                        >
+                          {emoji}
+                        </motion.button>
+                      );
+                    })}
                   </div>
                 </div>
 
@@ -225,21 +285,25 @@ export default function EditDestinationModal({
                 <div>
                   <label className="block text-sm text-gray-600 mb-3">Velg farge</label>
                   <div className="grid grid-cols-8 gap-2">
-                    {colorOptions.map((color) => (
-                      <motion.button
-                        key={color.value}
-                        type="button"
-                        onClick={() => setSelectedColor(color.value)}
-                        className={`aspect-square rounded-full transition-all ${
-                          selectedColor === color.value
-                            ? 'ring-4 ring-offset-2 ring-gray-300'
-                            : ''
-                        }`}
-                        style={{ backgroundColor: color.value }}
-                        title={color.name}
-                        whileTap={{ scale: 0.9 }}
-                      />
-                    ))}
+                    {COLOR_OPTIONS.map((color) => {
+                      const isSelected = selectedColor === color.value;
+                      return (
+                        <motion.button
+                          key={color.value}
+                          type="button"
+                          data-color={color.value}
+                          onClick={handleColorSelect}
+                          className={`aspect-square rounded-full transition-all ${
+                            isSelected
+                              ? 'ring-4 ring-offset-2 ring-gray-300'
+                              : ''
+                          }`}
+                          style={{ backgroundColor: color.value }}
+                          title={color.name}
+                          whileTap={{ scale: 0.9 }}
+                        />
+                      );
+                    })}
                   </div>
                 </div>
 
@@ -254,16 +318,16 @@ export default function EditDestinationModal({
                       className="w-20 h-20 rounded-full mx-auto mb-3 flex items-center justify-center text-3xl shadow-lg"
                       style={{
                         backgroundColor: selectedColor,
-                        boxShadow: `0 10px 40px -10px ${selectedColor}60`,
+                        boxShadow: previewBoxShadow,
                       }}
                       key={selectedEmoji + selectedColor}
                       initial={{ scale: 0.8 }}
                       animate={{ scale: 1 }}
-                      transition={{ type: 'spring', stiffness: 300 }}
+                      transition={PREVIEW_TRANSITION}
                     >
                       <div className="filter drop-shadow-sm">{selectedEmoji}</div>
                     </motion.div>
-                    <p className="text-sm text-gray-700">{label || 'Forhåndsvisning'}</p>
+                    <p className="text-sm text-gray-700">{previewLabel}</p>
                   </div>
                 </motion.div>
               </div>
@@ -288,10 +352,7 @@ export default function EditDestinationModal({
                 {onClear && destination && !destination.isCenter && !destination.isEmpty && destination.label !== 'Legg til sted' && (
                   <button
                     type="button"
-                    onClick={() => {
-                      onClear();
-                      onClose();
-                    }}
+                    onClick={handleClearClick}
                     className="px-4 py-3.5 rounded-xl border border-orange-200 text-orange-600 active:bg-orange-50 transition-colors"
                     title="Tøm node"
                   >
@@ -308,7 +369,7 @@ export default function EditDestinationModal({
                 <button
                   type="submit"
                   onClick={handleSubmit}
-                  disabled={!label.trim()}
+                  disabled={!isFormValid}
                   className="flex-1 px-6 py-3.5 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 text-white active:opacity-80 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg"
                 >
                   Lagre
@@ -347,13 +408,7 @@ export default function EditDestinationModal({
               Avbryt
             </AlertDialogCancel>
             <AlertDialogAction
-              onClick={() => {
-                if (onDelete) {
-                  onDelete();
-                  onClose();
-                }
-                setShowDeleteConfirm(false);
-              }}
+              onClick={handleDeleteConfirm}
               className="flex-1 bg-red-600 hover:bg-red-700 text-white font-semibold"
             >
               Slett
@@ -364,3 +419,5 @@ export default function EditDestinationModal({
     </AnimatePresence>
   );
 }
+
+export default React.memo(EditDestinationModal);

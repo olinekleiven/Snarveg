@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Bus, FootprintsIcon as Walking, CloudRain, Sun, Timer, Wallet, Leaf, ArrowRight, Check } from 'lucide-react';
 
@@ -134,52 +134,101 @@ const questions: Question[] = [
   },
 ];
 
+// Animation constants
+const ANIMATION_VARIANTS = {
+  enter: (direction: number) => ({
+    x: direction > 0 ? 300 : -300,
+    opacity: 0,
+  }),
+  center: {
+    x: 0,
+    opacity: 1,
+  },
+  exit: (direction: number) => ({
+    x: direction > 0 ? -300 : 300,
+    opacity: 0,
+  }),
+};
+
+const TRANSITION_CONFIG = {
+  x: { type: 'spring' as const, stiffness: 300, damping: 30 },
+  opacity: { duration: 0.2 },
+};
+
+const AUTO_ADVANCE_DELAY = 800; // Slightly faster transitions between steps
+
+// Background animation constants
+const BG_ORB_1_ANIMATE = {
+  scale: [1, 1.2, 1],
+  opacity: [0.3, 0.5, 0.3],
+};
+
+const BG_ORB_1_TRANSITION = {
+  duration: 8,
+  repeat: Infinity,
+  ease: 'easeInOut' as const,
+};
+
+const BG_ORB_2_ANIMATE = {
+  scale: [1.2, 1, 1.2],
+  opacity: [0.5, 0.3, 0.5],
+};
+
+const BG_ORB_2_TRANSITION = {
+  duration: 10,
+  repeat: Infinity,
+  ease: 'easeInOut' as const,
+};
+
+const PROGRESS_TRANSITION = {
+  duration: 0.5,
+  ease: 'easeOut' as const,
+};
+
+const SELECTED_BG_TRANSITION = {
+  type: 'spring' as const,
+  stiffness: 300,
+  damping: 30,
+};
+
 export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   const [currentStep, setCurrentStep] = useState(0);
   const [preferences, setPreferences] = useState<Partial<UserPreferences>>({});
   const [direction, setDirection] = useState(1);
 
-  const currentQuestion = questions[currentStep];
-  const progress = ((currentStep + 1) / questions.length) * 100;
+  // Memoize current question and progress
+  const currentQuestion = useMemo(() => questions[currentStep], [currentStep]);
+  const progress = useMemo(
+    () => ((currentStep + 1) / questions.length) * 100,
+    [currentStep]
+  );
 
-  const handleSelect = (value: string) => {
-    const newPreferences = {
-      ...preferences,
+  const handleSelect = useCallback((value: string) => {
+    setPreferences(prev => ({
+      ...prev,
       [currentQuestion.id]: value,
-    };
-    setPreferences(newPreferences);
+    }));
 
     // Auto-advance after selection ONLY if not on last step
     // On last step, user must click "Ferdig!" button manually
     if (currentStep < questions.length - 1) {
       setTimeout(() => {
         setDirection(1);
-        setCurrentStep(currentStep + 1);
-      }, 800); // Slightly faster transitions between steps
+        setCurrentStep(prev => prev + 1);
+      }, AUTO_ADVANCE_DELAY);
     }
-  };
+  }, [currentQuestion.id, currentStep]);
 
-  const handleBack = () => {
+  const handleBack = useCallback(() => {
     if (currentStep > 0) {
       setDirection(-1);
-      setCurrentStep(currentStep - 1);
+      setCurrentStep(prev => prev - 1);
     }
-  };
+  }, [currentStep]);
 
-  const variants = {
-    enter: (direction: number) => ({
-      x: direction > 0 ? 300 : -300,
-      opacity: 0,
-    }),
-    center: {
-      x: 0,
-      opacity: 1,
-    },
-    exit: (direction: number) => ({
-      x: direction > 0 ? -300 : 300,
-      opacity: 0,
-    }),
-  };
+  const handleComplete = useCallback(() => {
+    onComplete(preferences as UserPreferences);
+  }, [preferences, onComplete]);
 
   return (
     <div className="fixed inset-0 bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 overflow-y-auto">
@@ -187,27 +236,13 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <motion.div
           className="absolute top-20 -right-20 w-64 h-64 bg-gradient-to-br from-blue-200/30 to-indigo-200/30 rounded-full blur-3xl"
-          animate={{
-            scale: [1, 1.2, 1],
-            opacity: [0.3, 0.5, 0.3],
-          }}
-          transition={{
-            duration: 8,
-            repeat: Infinity,
-            ease: 'easeInOut',
-          }}
+          animate={BG_ORB_1_ANIMATE}
+          transition={BG_ORB_1_TRANSITION}
         />
         <motion.div
           className="absolute -bottom-20 -left-20 w-80 h-80 bg-gradient-to-tr from-purple-200/30 to-pink-200/30 rounded-full blur-3xl"
-          animate={{
-            scale: [1.2, 1, 1.2],
-            opacity: [0.5, 0.3, 0.5],
-          }}
-          transition={{
-            duration: 10,
-            repeat: Infinity,
-            ease: 'easeInOut',
-          }}
+          animate={BG_ORB_2_ANIMATE}
+          transition={BG_ORB_2_TRANSITION}
         />
       </div>
 
@@ -232,7 +267,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
               className="absolute inset-y-0 left-0 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-full"
               initial={{ width: 0 }}
               animate={{ width: `${progress}%` }}
-              transition={{ duration: 0.5, ease: 'easeOut' }}
+              transition={PROGRESS_TRANSITION}
             />
           </div>
           <p className="text-sm text-gray-500 mt-2">
@@ -246,14 +281,11 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
             <motion.div
               key={currentStep}
               custom={direction}
-              variants={variants}
+              variants={ANIMATION_VARIANTS}
               initial="enter"
               animate="center"
               exit="exit"
-              transition={{
-                x: { type: 'spring', stiffness: 300, damping: 30 },
-                opacity: { duration: 0.2 },
-              }}
+              transition={TRANSITION_CONFIG}
               className="flex-1 flex flex-col"
             >
               <div className="mb-6">
@@ -289,7 +321,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
                         <motion.div
                           className={`absolute inset-0 bg-gradient-to-br ${option.gradient}`}
                           layoutId="selectedBackground"
-                          transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+                          transition={SELECTED_BG_TRANSITION}
                         />
                       )}
 
@@ -352,11 +384,11 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
             <motion.button
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              onClick={() => onComplete(preferences as UserPreferences)}
+              onClick={handleComplete}
               className="flex-1 py-3 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-xl shadow-lg"
               whileTap={{ scale: 0.95 }}
             >
-              Ferdig! Start å bruke Snarveg
+              Ferdig
             </motion.button>
           )}
         </div>

@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect, useMemo } from 'react';
+import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Edit, Check } from 'lucide-react';
 import DestinationNode from './DestinationNode';
@@ -15,7 +15,6 @@ interface NavigationWheelProps {
   maxDestinations?: number; // Maximum number of destinations (excluding center)
   deletingNodeId?: string | null; // ID of node currently being deleted
   isEditMode?: boolean; // Whether edit mode is active
-  onNodeMove?: (nodeId: string, newPosition: { angle: number; radius: number }) => void; // Callback when node is moved
   onNodeSwap?: (nodeId1: string, nodeId2: string) => void; // Callback when two nodes swap positions
   onNodeDelete?: (nodeId: string) => void; // Callback when node delete button is clicked
   onEditModeToggle?: () => void; // Callback to toggle edit mode
@@ -30,7 +29,6 @@ export default function NavigationWheel({
   maxDestinations = 20,
   deletingNodeId = null,
   isEditMode = false,
-  onNodeMove,
   onNodeSwap,
   onNodeDelete,
   onEditModeToggle,
@@ -54,8 +52,6 @@ export default function NavigationWheel({
   const [lockingConnection, setLockingConnection] = useState<{ from: string; to: string } | null>(null);
   const [lockProgress, setLockProgress] = useState(0);
   const [carAnimation, setCarAnimation] = useState<{ from: string; to: string } | null>(null);
-  const [lastTapTime, setLastTapTime] = useState<number>(0);
-  const [lastTapId, setLastTapId] = useState<string>('');
   const [hoverTimer, setHoverTimer] = useState<NodeJS.Timeout | null>(null);
   const [hoverStartTime, setHoverStartTime] = useState<number | null>(null);
   const hoverProgressIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -63,9 +59,24 @@ export default function NavigationWheel({
   const [longPressNodeId, setLongPressNodeId] = useState<string | null>(null);
   const [pointerStartPos, setPointerStartPos] = useState<{ x: number; y: number } | null>(null);
   const [pointerDownNodeId, setPointerDownNodeId] = useState<string | null>(null);
-  const [chainedDrawing, setChainedDrawing] = useState(false);
-  const [chainedFromNode, setChainedFromNode] = useState<string | null>(null);
-  const currentMousePosRef = useRef<{ x: number; y: number } | null>(null);
+  
+  // Performance: Cache LINE_Y_CAL value to avoid getComputedStyle calls on every move
+  const lineYCalRef = useRef<number>(LINE_Y_CAL);
+  
+  // Update cached value periodically (not on every move)
+  useEffect(() => {
+    const updateCal = () => {
+      lineYCalRef.current = Number(getComputedStyle(document.documentElement).getPropertyValue('--line-y-cal') || LINE_Y_CAL);
+    };
+    updateCal();
+    // Update every 500ms instead of on every move
+    const interval = setInterval(updateCal, 500);
+    return () => clearInterval(interval);
+  }, []);
+  
+  // Throttle pointer move events for better performance
+  const lastMoveTimeRef = useRef<number>(0);
+  const THROTTLE_DELAY = 16; // ~60fps
   
   // Edit mode state
   const [draggingNodeId, setDraggingNodeId] = useState<string | null>(null);
@@ -74,8 +85,10 @@ export default function NavigationWheel({
   const [hoveredSwapNodeId, setHoveredSwapNodeId] = useState<string | null>(null);
   const [swapAnimation, setSwapAnimation] = useState<{ from: string; to: string } | null>(null);
 
-  const centerNode = destinations.find(d => d.isCenter);
-  const otherNodes = destinations.filter(d => !d.isCenter);
+  // Memoize node arrays to avoid recalculating on every render
+  const centerNode = useMemo(() => destinations.find(d => d.isCenter), [destinations]);
+  const otherNodes = useMemo(() => destinations.filter(d => !d.isCenter), [destinations]);
+  const filledNodes = useMemo(() => otherNodes.filter(d => !d.isEmpty), [otherNodes]);
 
   // Compute evenly spaced angles for the non-center nodes so they are
   // distributed evenly around the wheel regardless of their initial values.
@@ -98,8 +111,7 @@ export default function NavigationWheel({
   }, [otherNodes]);
   
   // Check if we've reached the maximum limit (count only filled destinations, not empty "+" nodes)
-  const filledNodes = otherNodes.filter(d => !d.isEmpty);
-  const hasReachedMax = filledNodes.length >= maxDestinations;
+  const hasReachedMax = useMemo(() => filledNodes.length >= maxDestinations, [filledNodes, maxDestinations]);
 
   const getNodePosition = (angle: number, radius: number) => {
     const rad = (angle * Math.PI) / 180;
@@ -297,16 +309,27 @@ export default function NavigationWheel({
     // getNodeScreenPosition already returns coordinates relative to container
     const nodePos = getNodeScreenPosition(dest);
     
-    // Apply Y-calibration offset to line endpoints
-    const dy = Number(getComputedStyle(document.documentElement).getPropertyValue('--line-y-cal') || LINE_Y_CAL);
+    // Apply Y-calibration offset to line endpoints (use cached value)
+    const dy = lineYCalRef.current;
     
     setIsDrawing(true);
     setDrawStart({ id: nodeId, x: nodePos.x, y: nodePos.y + dy });
     setDrawCurrent({ x: nodePos.x, y: nodePos.y + dy });
   };
 
+  // Helper function to reset all drawing state
+  const resetDrawingState = useCallback(() => {
+    setIsDrawing(false);
+    setDrawStart(null);
+    setDrawCurrent(null);
+    setHoveredNode(null);
+    setLockProgress(0);
+    setHoverStartTime(null);
+    setLockingConnection(null);
+  }, []);
+
   // Helper function to check if a node can start a drawing
-  const canNodeStartDrawing = (nodeId: string): { allowed: boolean; message?: string } => {
+  const canNodeStartDrawing = useCallback((nodeId: string): { allowed: boolean; message?: string } => {
     const destination = destinations.find(d => d.id === nodeId);
     
     // Check if target node is empty (isEmpty or has no name)
@@ -362,9 +385,9 @@ export default function NavigationWheel({
     }
     
     return { allowed: true };
-  };
+  }, [destinations, connections]);
 
-  const handleContextMenu = (e: React.MouseEvent, nodeId: string) => {
+  const handleContextMenu = useCallback((e: React.MouseEvent, nodeId: string) => {
     e.preventDefault();
     e.stopPropagation();
     
@@ -372,7 +395,7 @@ export default function NavigationWheel({
     if (destination && onNodeClick) {
       onNodeClick(destination);
     }
-  };
+  }, [destinations, onNodeClick]);
 
   const handlePointerMove = (e: React.PointerEvent) => {
     // Handle drag-and-drop in edit mode - only allow swapping, not free movement
@@ -420,7 +443,7 @@ export default function NavigationWheel({
       }
     }
     
-    if ((!isDrawing && !chainedDrawing) || !containerRef.current || !drawStart) return;
+    if (!isDrawing || !containerRef.current || !drawStart) return;
 
     const rect = containerRef.current.getBoundingClientRect();
     // Mouse position relative to container (matches SVG coordinate system)
@@ -429,11 +452,16 @@ export default function NavigationWheel({
       y: e.clientY - rect.top,
     };
     
-    // Apply Y-calibration offset to line endpoints
-    const dy = Number(getComputedStyle(document.documentElement).getPropertyValue('--line-y-cal') || LINE_Y_CAL);
+    // Apply Y-calibration offset to line endpoints (use cached value)
+    const dy = lineYCalRef.current;
     
-    // Store current mouse position for chained drawing (with calibration)
-    currentMousePosRef.current = { x: mousePos.x, y: mousePos.y + dy };
+    // Throttle state updates for better performance
+    const now = Date.now();
+    if (now - lastMoveTimeRef.current < THROTTLE_DELAY) {
+      // Skip this update if too soon since last one
+      return;
+    }
+    lastMoveTimeRef.current = now;
     
     setDrawCurrent({ x: mousePos.x, y: mousePos.y + dy });
 
@@ -483,36 +511,14 @@ export default function NavigationWheel({
       }, 16);
       hoverProgressIntervalRef.current = progressInterval;
 
-      // Auto-lock timer
+      // Auto-lock timer - only sets up locking state, does NOT create connection or start animation
+      // Connection creation and car animation happen in handlePointerUp when pointer is released
       const timer = setTimeout(() => {
-        // Auto-lock the connection
+        // Just mark that this connection should be locked when pointer is released
+        // Don't create connection or start animation here - that happens in handlePointerUp
         if (newHoveredNode && drawStart) {
-          // Create connection
-          onConnectionCreate(drawStart.id, newHoveredNode);
-          
-          // Lock it immediately
-          onConnectionLock(drawStart.id, newHoveredNode);
-
-          // Show car animation
-          setCarAnimation({ from: drawStart.id, to: newHoveredNode });
-          setTimeout(() => setCarAnimation(null), 1000);
-
-          // Stop drawing - user must explicitly start a new drag from the next node
-          setIsDrawing(false);
-          setDrawStart(null);
-          setDrawCurrent(null);
-          setHoveredNode(null);
-          setLockProgress(0);
-          setHoverStartTime(null);
-
-          toast.success(`${destinations.find(d => d.id === newHoveredNode)?.label} lagt til!`, {
-            duration: 1500,
-            style: {
-              background: '#10B981',
-              color: '#FFFFFF',
-              border: 'none',
-            },
-          });
+          // Set locking connection state for visual feedback
+          setLockingConnection({ from: drawStart.id, to: newHoveredNode });
         }
       }, lockDuration);
 
@@ -623,34 +629,38 @@ export default function NavigationWheel({
     setPointerStartPos(null);
     setPointerDownNodeId(null);
 
-    if ((!isDrawing && !chainedDrawing) || !drawStart) {
-      setIsDrawing(false);
-      setChainedDrawing(false);
-      setChainedFromNode(null);
-      setDrawStart(null);
-      setDrawCurrent(null);
-      setHoveredNode(null);
-      setLockProgress(0);
-      setHoverStartTime(null);
-      currentMousePosRef.current = null;
+    if (!isDrawing || !drawStart) {
+      resetDrawingState();
       return;
     }
 
     // Check if released on a valid node (manual release before auto-lock)
     if (hoveredNode && hoveredNode !== drawStart.id) {
-      // Create connection
-      onConnectionCreate(drawStart.id, hoveredNode);
+      // Cancel any auto-lock timers to prevent duplicate connections
+      if (hoverTimer) {
+        clearTimeout(hoverTimer);
+        setHoverTimer(null);
+      }
+      if (hoverProgressIntervalRef.current) {
+        clearInterval(hoverProgressIntervalRef.current);
+        hoverProgressIntervalRef.current = null;
+      }
       
-      // Start car animation
+      // Check if connection already exists to prevent duplicates
+      const alreadyExists = connections.some(
+        c => c.from === drawStart.id && c.to === hoveredNode
+      );
+      
+      if (!alreadyExists) {
+        // Create connection
+        onConnectionCreate(drawStart.id, hoveredNode);
+      }
+      
+      // Start car animation - only when pointer is released
       setCarAnimation({ from: drawStart.id, to: hoveredNode });
       
+      // Set locking connection for visual feedback
       setLockingConnection({ from: drawStart.id, to: hoveredNode });
-      
-      // If this is chained drawing, stop it and start regular drawing
-      if (chainedDrawing) {
-        setChainedDrawing(false);
-        setChainedFromNode(null);
-      }
 
       // Start lock timer
       const startTime = Date.now();
@@ -667,31 +677,16 @@ export default function NavigationWheel({
       }, 16);
 
       const timer = setTimeout(() => {
-        // Lock the connection
-        onConnectionLock(drawStart.id, hoveredNode);
+        if (!alreadyExists) {
+          // Lock the connection
+          onConnectionLock(drawStart.id, hoveredNode);
+        }
         
         // Clear car animation after lock
         setCarAnimation(null);
         
-        // Enable chained drawing - continue from the target node
-        setChainedDrawing(true);
-        setChainedFromNode(hoveredNode);
-        
-        // Update drawStart to the target node position
-        const targetNodePos = getNodeScreenPosition(destinations.find(d => d.id === hoveredNode)!);
-        
-        // Apply Y-calibration offset to line endpoints
-        const dy = Number(getComputedStyle(document.documentElement).getPropertyValue('--line-y-cal') || LINE_Y_CAL);
-        
-        setDrawStart({ id: hoveredNode, x: targetNodePos.x, y: targetNodePos.y + dy });
-        
-        // Keep drawCurrent at mouse position for immediate continuation (already calibrated)
-        if (currentMousePosRef.current) {
-          setDrawCurrent(currentMousePosRef.current);
-        } else {
-          setDrawCurrent({ x: targetNodePos.x, y: targetNodePos.y + dy });
-        }
-
+        // Reset all drawing state - no chained drawing
+        resetDrawingState();
         setLockingConnection(null);
         setLockProgress(0);
         clearInterval(progressInterval);
@@ -700,19 +695,12 @@ export default function NavigationWheel({
       setLockTimer(timer);
     } else {
       // Reset if not released on valid node
-      setIsDrawing(false);
-      setChainedDrawing(false);
-      setChainedFromNode(null);
-      setDrawStart(null);
-      setDrawCurrent(null);
-      setHoveredNode(null);
-      setLockProgress(0);
-      setHoverStartTime(null);
-      currentMousePosRef.current = null;
+      resetDrawingState();
     }
   };
 
   const handleCancel = () => {
+    // Clear all timers
     if (lockTimer) {
       clearTimeout(lockTimer);
       setLockTimer(null);
@@ -725,18 +713,15 @@ export default function NavigationWheel({
       clearInterval(hoverProgressIntervalRef.current);
       hoverProgressIntervalRef.current = null;
     }
+    if (longPressTimer) {
+      clearTimeout(longPressTimer);
+      setLongPressTimer(null);
+    }
     
+    // Reset all drawing state
     setLockingConnection(null);
     setCarAnimation(null);
-    setIsDrawing(false);
-    setChainedDrawing(false);
-    setChainedFromNode(null);
-    setDrawStart(null);
-    setDrawCurrent(null);
-    setHoveredNode(null);
-    setLockProgress(0);
-    setHoverStartTime(null);
-    currentMousePosRef.current = null;
+    resetDrawingState();
   };
 
   // Clean up timers on unmount
@@ -745,8 +730,38 @@ export default function NavigationWheel({
       if (lockTimer) clearTimeout(lockTimer);
       if (hoverTimer) clearTimeout(hoverTimer);
       if (hoverProgressIntervalRef.current) clearInterval(hoverProgressIntervalRef.current);
+      if (longPressTimer) clearTimeout(longPressTimer);
     };
-  }, [lockTimer, hoverTimer]);
+  }, [lockTimer, hoverTimer, longPressTimer]);
+  
+  // Clean up drawing state when connections are cleared
+  useEffect(() => {
+    if (connections.length === 0) {
+      // Clear all timers
+      if (lockTimer) {
+        clearTimeout(lockTimer);
+        setLockTimer(null);
+      }
+      if (hoverTimer) {
+        clearTimeout(hoverTimer);
+        setHoverTimer(null);
+      }
+      if (hoverProgressIntervalRef.current) {
+        clearInterval(hoverProgressIntervalRef.current);
+        hoverProgressIntervalRef.current = null;
+      }
+      if (longPressTimer) {
+        clearTimeout(longPressTimer);
+        setLongPressTimer(null);
+      }
+      
+      // Reset all drawing state and hide car animation
+      setCarAnimation(null);
+      setLockingConnection(null);
+      resetDrawingState();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [connections.length]);
 
   return (
     <div 
@@ -758,9 +773,9 @@ export default function NavigationWheel({
       onPointerLeave={handleCancel}
     >
       {/* Background decoration */}
-      <div className="absolute inset-0 flex items-start justify-center pointer-events-none pt-28">
-        <div className="w-[80vw] max-w-[400px] aspect-square rounded-full border-2 border-dashed border-gray-200 opacity-50" />
-        <div className="absolute w-[60vw] max-w-[280px] aspect-square rounded-full border border-gray-100" style={{ marginTop: 'calc(80vw * 0.1)' }} />
+      <div className="absolute inset-0 flex items-start justify-center pointer-events-none pt-10">
+        <div className="w-[85vw] max-w-[450px] aspect-square rounded-full border-2 border-dashed border-gray-200 opacity-50" />
+        <div className="absolute w-[65vw] max-w-[320px] aspect-square rounded-full border border-gray-100" style={{ marginTop: 'calc(85vw * 0.1)' }} />
       </div>
 
       {/* Connection lines SVG */}
@@ -770,28 +785,33 @@ export default function NavigationWheel({
         style={{ zIndex: 1 }}
       >
         <AnimatePresence>
-          {/* All connections (locked and unlocked) */}
-          {connections.map((conn, idx) => {
-            const fromDest = destinations.find(d => d.id === conn.from);
-            const toDest = destinations.find(d => d.id === conn.to);
-            if (!fromDest || !toDest) return null;
+          {/* All connections (locked and unlocked) - filter out duplicates */}
+          {connections
+            .filter((conn, idx, self) => {
+              // Remove duplicates - keep only first occurrence of each unique from-to pair
+              return self.findIndex(c => c.from === conn.from && c.to === conn.to) === idx;
+            })
+            .map((conn) => {
+              const fromDest = destinations.find(d => d.id === conn.from);
+              const toDest = destinations.find(d => d.id === conn.to);
+              if (!fromDest || !toDest) return null;
 
-            const fromPos = getNodeScreenPosition(fromDest);
-            const toPos = getNodeScreenPosition(toDest);
-            
-            // Apply Y-calibration offset to line endpoints
-            const dy = Number(getComputedStyle(document.documentElement).getPropertyValue('--line-y-cal') || LINE_Y_CAL);
+              const fromPos = getNodeScreenPosition(fromDest);
+              const toPos = getNodeScreenPosition(toDest);
+              
+            // Apply Y-calibration offset to line endpoints (use cached value)
+            const dy = lineYCalRef.current;
 
             return (
               <DrawingLine
-                key={`connection-${conn.from}-${conn.to}-${idx}`}
+                key={`connection-${conn.from}-${conn.to}`}
                 from={{ x: fromPos.x, y: fromPos.y + dy }}
                 to={{ x: toPos.x, y: toPos.y + dy }}
                 color={toDest.color}
                 isLocked={conn.isLocked}
               />
             );
-          })}
+            })}
 
           {/* Locking connection */}
           {lockingConnection && (
@@ -803,8 +823,8 @@ export default function NavigationWheel({
               const fromPos = getNodeScreenPosition(fromDest);
               const toPos = getNodeScreenPosition(toDest);
               
-              // Apply Y-calibration offset to line endpoints
-              const dy = Number(getComputedStyle(document.documentElement).getPropertyValue('--line-y-cal') || LINE_Y_CAL);
+              // Apply Y-calibration offset to line endpoints (use cached value)
+              const dy = lineYCalRef.current;
 
               return (
                 <DrawingLine
@@ -819,16 +839,16 @@ export default function NavigationWheel({
             })()
           )}
 
-          {/* Active drawing line */}
-          {(isDrawing || chainedDrawing) && drawStart && drawCurrent && !lockingConnection && (
+          {/* Active drawing line - only show if not already locked */}
+          {isDrawing && drawStart && drawCurrent && !lockingConnection && (
             <motion.g>
               <motion.line
                 x1={drawStart.x}
                 y1={drawStart.y}
                 x2={drawCurrent.x}
                 y2={drawCurrent.y}
-                stroke={hoveredNode ? 
-                  destinations.find(d => d.id === hoveredNode)?.color || '#3B82F6' 
+                stroke={hoveredNode 
+                  ? destinations.find(d => d.id === hoveredNode)?.color || '#3B82F6' 
                   : '#94A3B8'
                 }
                 strokeWidth="4"
@@ -841,14 +861,18 @@ export default function NavigationWheel({
               {(() => {
                 // Calculate angle from drawStart to drawCurrent
                 const angle = Math.atan2(drawCurrent.y - drawStart.y, drawCurrent.x - drawStart.x);
-                const arrowLength = 10;
-                const arrowAngle = Math.PI / 6; // 30 degrees
+                const ARROW_LENGTH = 10;
+                const ARROW_ANGLE = Math.PI / 6; // 30 degrees
                 
                 // Calculate arrow points
-                const arrowX1 = drawCurrent.x - arrowLength * Math.cos(angle - arrowAngle);
-                const arrowY1 = drawCurrent.y - arrowLength * Math.sin(angle - arrowAngle);
-                const arrowX2 = drawCurrent.x - arrowLength * Math.cos(angle + arrowAngle);
-                const arrowY2 = drawCurrent.y - arrowLength * Math.sin(angle + arrowAngle);
+                const arrowX1 = drawCurrent.x - ARROW_LENGTH * Math.cos(angle - ARROW_ANGLE);
+                const arrowY1 = drawCurrent.y - ARROW_LENGTH * Math.sin(angle - ARROW_ANGLE);
+                const arrowX2 = drawCurrent.x - ARROW_LENGTH * Math.cos(angle + ARROW_ANGLE);
+                const arrowY2 = drawCurrent.y - ARROW_LENGTH * Math.sin(angle + ARROW_ANGLE);
+                
+                const hoveredColor = hoveredNode 
+                  ? destinations.find(d => d.id === hoveredNode)?.color || '#3B82F6' 
+                  : '#94A3B8';
                 
                 return (
                   <motion.path
@@ -856,10 +880,7 @@ export default function NavigationWheel({
                         L ${arrowX1} ${arrowY1} 
                         M ${drawCurrent.x} ${drawCurrent.y} 
                         L ${arrowX2} ${arrowY2}`}
-                    stroke={hoveredNode ? 
-                      destinations.find(d => d.id === hoveredNode)?.color || '#3B82F6' 
-                      : '#94A3B8'
-                    }
+                    stroke={hoveredColor}
                     strokeWidth="3"
                     strokeLinecap="round"
                     opacity={0.8}
@@ -869,21 +890,6 @@ export default function NavigationWheel({
                 );
               })()}
             </motion.g>
-          )}
-          
-          {/* Chained drawing indicator */}
-          {chainedDrawing && chainedFromNode && (
-            <motion.text
-              x={getNodeScreenPosition(destinations.find(d => d.id === chainedFromNode)!).x}
-              y={getNodeScreenPosition(destinations.find(d => d.id === chainedFromNode)!).y - 30}
-              textAnchor="middle"
-              className="text-xs font-medium fill-blue-600"
-              initial={{ opacity: 0, scale: 0.8 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: 0.5 }}
-            >
-              Fortsett å tegne...
-            </motion.text>
           )}
           
           {/* Car animation on route */}
@@ -1066,7 +1072,7 @@ export default function NavigationWheel({
           className="absolute top-8 left-1/2 -translate-x-1/2 bg-orange-100 border-2 border-orange-300 rounded-xl px-3 py-1.5 shadow-lg z-50"
         >
           <p className="text-orange-800 text-xs font-medium">
-            Edit Mode: Drag to reorder, click X to delete
+            Dra node over en annen for plass bytte. Trykk X for å slette
           </p>
         </motion.div>
       )}
@@ -1082,16 +1088,6 @@ export default function NavigationWheel({
         </motion.div>
       )}
 
-      {/* Lock instruction */}
-      {lockingConnection && (
-        <motion.div
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="absolute top-24 left-1/2 -translate-x-1/2 bg-blue-500 text-white px-6 py-3 rounded-full shadow-lg text-sm z-50"
-        >
-          Hold for å låse ({Math.ceil((1 - lockProgress))}s)
-        </motion.div>
-      )}
 
       {/* Progress hint - shows after first connection - moved to top */}
         {connections.length > 0 && connections.length < 4 && !isDrawing && !lockingConnection && (
@@ -1109,7 +1105,6 @@ export default function NavigationWheel({
       <AnimatePresence>
         {onEditModeToggle && 
          !isDrawing && 
-         !chainedDrawing && 
          !lockingConnection && 
          connections.length === 0 && 
          !carAnimation && (
@@ -1125,15 +1120,15 @@ interface EditButtonProps {
   onToggle: () => void;
 }
 
-function EditButton({ isEditMode, onToggle }: EditButtonProps) {
+const EditButton = React.memo(function EditButton({ isEditMode, onToggle }: EditButtonProps) {
+  const buttonClassName = isEditMode 
+    ? 'bg-orange-500 hover:bg-orange-600 text-white' 
+    : 'bg-white hover:bg-gray-50 text-gray-800 border-2 border-pink-200';
+  
   return (
     <motion.button
       onClick={onToggle}
-      className={`fixed bottom-6 left-4 px-4 py-2 rounded-full flex items-center gap-2 font-medium transition-colors backdrop-blur-sm shadow-lg z-50 ${
-        isEditMode 
-          ? 'bg-orange-500 hover:bg-orange-600 text-white' 
-          : 'bg-white hover:bg-gray-50 text-gray-800 border-2 border-pink-200'
-      }`}
+      className={`fixed bottom-6 left-4 px-4 py-2 rounded-full flex items-center gap-2 font-medium transition-colors backdrop-blur-sm shadow-lg z-50 ${buttonClassName}`}
       whileTap={{ scale: 0.95 }}
       initial={{ y: 20, opacity: 0 }}
       animate={{ y: 0, opacity: 1 }}
@@ -1153,4 +1148,4 @@ function EditButton({ isEditMode, onToggle }: EditButtonProps) {
       )}
     </motion.button>
   );
-}
+});

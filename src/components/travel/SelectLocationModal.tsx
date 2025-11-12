@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface Coordinates {
@@ -12,23 +12,50 @@ interface SelectLocationModalProps {
   onNext: (coords: Coordinates, searchedText?: string) => void;
 }
 
-export default function SelectLocationModal({ isOpen, onClose, onNext }: SelectLocationModalProps) {
+// Constants
+const COORDINATE_PRECISION = 6;
+const GRID_COLS = 6;
+const GRID_ROWS = 4;
+const GRID_CELL_COUNT = GRID_COLS * GRID_ROWS;
+const STEPPER_STEPS = [1, 2];
+
+// Animation constants
+const SPRING_TRANSITION = {
+  type: 'spring' as const,
+  stiffness: 300,
+  damping: 30,
+};
+
+// Generate grid cells array once
+const GRID_CELLS = Array.from({ length: GRID_CELL_COUNT });
+
+function SelectLocationModal({ isOpen, onClose, onNext }: SelectLocationModalProps) {
   const [search, setSearch] = useState<string>('');
   const [coords, setCoords] = useState<Coordinates | null>(null);
 
-  const handleGridClick = (e: React.MouseEvent<HTMLDivElement>) => {
+  const handleGridClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     const rect = (e.currentTarget as HTMLDivElement).getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
-    const lat = +(1 - y / rect.height).toFixed(6);
-    const lng = +(x / rect.width).toFixed(6);
+    const lat = +(1 - y / rect.height).toFixed(COORDINATE_PRECISION);
+    const lng = +(x / rect.width).toFixed(COORDINATE_PRECISION);
     setCoords({ lat, lng });
-  };
+  }, []);
 
-  const handleNext = () => {
+  const handleNext = useCallback(() => {
     if (!coords) return;
-    onNext(coords, search.trim() || undefined);
-  };
+    const trimmedSearch = search.trim();
+    onNext(coords, trimmedSearch || undefined);
+  }, [coords, search, onNext]);
+
+  // Memoize pin position style
+  const pinStyle = useMemo(() => {
+    if (!coords) return null;
+    return {
+      left: `${coords.lng * 100}%`,
+      top: `${(1 - coords.lat) * 100}%`,
+    };
+  }, [coords]);
 
   return (
     <AnimatePresence>
@@ -47,7 +74,7 @@ export default function SelectLocationModal({ isOpen, onClose, onNext }: SelectL
             initial={{ y: '100%' }}
             animate={{ y: 0 }}
             exit={{ y: '100%' }}
-            transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+            transition={SPRING_TRANSITION}
           >
             <div className="flex justify-center pt-3 pb-2">
               <div className="w-12 h-1.5 bg-gray-300 rounded-full" />
@@ -56,7 +83,7 @@ export default function SelectLocationModal({ isOpen, onClose, onNext }: SelectL
             {/* Stepper (dots) - step 1/2, small and top-left */}
             <div className="px-6">
               <div className="flex items-center gap-1 select-none mb-1">
-                {[1, 2].map((i) => (
+                {STEPPER_STEPS.map((i) => (
                   <span
                     key={i}
                     className={`${i <= 1 ? 'bg-blue-500' : 'bg-gray-300'} w-2.5 h-2.5 rounded-full`}
@@ -86,14 +113,14 @@ export default function SelectLocationModal({ isOpen, onClose, onNext }: SelectL
                 onClick={handleGridClick}
               >
                 <div className="absolute inset-0 grid grid-cols-6 grid-rows-4">
-                  {Array.from({ length: 24 }).map((_, idx) => (
+                  {GRID_CELLS.map((_, idx) => (
                     <div key={idx} className="border border-white/50" />
                   ))}
                 </div>
-                {coords && (
+                {coords && pinStyle && (
                   <div
                     className="absolute -translate-x-1/2 -translate-y-full"
-                    style={{ left: `${coords.lng * 100}%`, top: `${(1 - coords.lat) * 100}%` }}
+                    style={pinStyle}
                   >
                     <div className="w-4 h-4 bg-red-500 rounded-full shadow" />
                   </div>
@@ -129,5 +156,7 @@ export default function SelectLocationModal({ isOpen, onClose, onNext }: SelectL
     </AnimatePresence>
   );
 }
+
+export default React.memo(SelectLocationModal);
 
 

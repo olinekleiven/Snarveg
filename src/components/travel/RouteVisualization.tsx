@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, Clock, Navigation, AlertCircle, MapPin, Ticket, ChevronUp, ChevronDown } from 'lucide-react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { motion } from 'framer-motion';
+import { Clock, Navigation, AlertCircle, MapPin, Ticket, ChevronUp, ChevronDown } from 'lucide-react';
 import { Route, Destination } from './types';
 import MapView from './MapView';
 import TicketView from './TicketView';
@@ -26,7 +26,10 @@ interface DestinationItemProps {
   onEdit?: () => void;
 }
 
-const DestinationItem: React.FC<DestinationItemProps> = ({
+// Animation constants
+const ANIMATION_DELAY_BASE = 0.15;
+
+const DestinationItem = React.memo<DestinationItemProps>(({
   dest,
   index,
   totalCount,
@@ -43,7 +46,7 @@ const DestinationItem: React.FC<DestinationItemProps> = ({
     <motion.div
       initial={{ opacity: 0, x: -20 }}
       animate={{ opacity: 1, x: 0 }}
-      transition={{ delay: index * 0.15, type: 'spring' }}
+      transition={{ delay: index * ANIMATION_DELAY_BASE, type: 'spring' }}
       className="relative"
     >
       <div className="flex items-start gap-3 w-full">
@@ -91,7 +94,7 @@ const DestinationItem: React.FC<DestinationItemProps> = ({
           }}
           initial={{ scale: 0 }}
           animate={{ scale: 1 }}
-          transition={{ delay: index * 0.15 + 0.1, type: 'spring' }}
+          transition={{ delay: index * ANIMATION_DELAY_BASE + 0.1, type: 'spring' }}
           whileHover={{ scale: 1.05 }}
         >
           {dest.emoji}
@@ -126,9 +129,58 @@ const DestinationItem: React.FC<DestinationItemProps> = ({
       </div>
     </motion.div>
   );
+});
+
+// Delay probability constants
+const DELAY_PROBABILITY = {
+  '🚌': 0.35,  // Buss - 35% chance
+  '🚈': 0.25,  // Bybanen - 25% chance
+  '🛳️': 0.30,  // Ferge - 30% chance
+  '🚕': 0.20,  // Taxi - 20% chance
+  '🚶‍♂️': 0.05, // Walking - 5% chance (weather)
+  '🚲': 0.10,  // Sykkel - 10% chance
+} as const;
+
+const DELAY_REASONS = {
+  '🚌': ['trafikk', 'høy pågang', 'tekniske problemer', 'veistengning'],
+  '🚈': ['signalproblemer', 'forsinkelse fra tidligere stopp', 'teknisk vedlikehold', 'trafikkork'],
+  '🛳️': ['værforhold', 'høy trafikk i havnen', 'tekniske problemer', 'forsinkelse fra forrige rute'],
+  '🚕': ['trafikk', 'omvei', 'høy etterspørsel'],
+  '🚶‍♂️': ['dårlig vær', 'høy fotgjengertrafikk'],
+  '🚲': ['dårlig vær', 'stengt sykkelvei', 'tekniske problemer'],
+} as const;
+
+const DEFAULT_DELAY_PROBABILITY = 0.15;
+const DELAY_MIN_MINUTES = 2;
+const DELAY_MAX_MINUTES = 13;
+
+// Transport mode labels
+const TRANSPORT_LABELS: Record<string, string> = {
+  '🚶‍♂️': 'Gå',
+  '🚌': 'Buss',
+  '🚈': 'Bybanen',
+  '🚲': 'Sykkel',
+  '🛳️': 'Ferge',
+  '🚕': 'Taxi',
 };
 
-export default function RouteVisualization({ route, destinations, onBack, onPurchaseTicket, onEditDestination, onReorderRoute }: RouteVisualizationProps) {
+// Generate random delays for transport modes
+function generateDelayForTransport(transportMode: string): { hasDelay: boolean; delay: number; reason: string } {
+  const probability = DELAY_PROBABILITY[transportMode as keyof typeof DELAY_PROBABILITY] ?? DEFAULT_DELAY_PROBABILITY;
+  const hasDelay = Math.random() < probability;
+  
+  if (!hasDelay) {
+    return { hasDelay: false, delay: 0, reason: '' };
+  }
+
+  const delayMinutes = Math.floor(Math.random() * (DELAY_MAX_MINUTES - DELAY_MIN_MINUTES + 1)) + DELAY_MIN_MINUTES;
+  const reasonList = DELAY_REASONS[transportMode as keyof typeof DELAY_REASONS] ?? ['forsinkelse'];
+  const reason = reasonList[Math.floor(Math.random() * reasonList.length)];
+
+  return { hasDelay: true, delay: delayMinutes, reason };
+}
+
+export default function RouteVisualization({ route, destinations, onPurchaseTicket, onEditDestination, onReorderRoute }: RouteVisualizationProps) {
   const [showMap, setShowMap] = useState(false);
   const [showTicket, setShowTicket] = useState(false);
   const [showTicketOverview, setShowTicketOverview] = useState(false);
@@ -139,76 +191,75 @@ export default function RouteVisualization({ route, destinations, onBack, onPurc
     setLocalRouteOrder(route.destinations);
   }, [route.destinations]);
   
-  const routeDestinations = localRouteOrder
-    .map(id => destinations.find(d => d.id === id))
-    .filter(Boolean) as Destination[];
-
-  const moveDestinationUp = (index: number) => {
-    if (index <= 1) return; // Can't move start or above start
-    const newOrder = [...localRouteOrder];
-    [newOrder[index], newOrder[index - 1]] = [newOrder[index - 1], newOrder[index]];
-    setLocalRouteOrder(newOrder);
-    onReorderRoute?.(newOrder);
-  };
-
-  const moveDestinationDown = (index: number) => {
-    if (index >= localRouteOrder.length - 2) return; // Can't move last or below last
-    const newOrder = [...localRouteOrder];
-    [newOrder[index], newOrder[index + 1]] = [newOrder[index + 1], newOrder[index]];
-    setLocalRouteOrder(newOrder);
-    onReorderRoute?.(newOrder);
-  };
-
-  // Generate random delays for transport modes
-  const generateDelayForTransport = (transportMode: string): { hasDelay: boolean; delay: number; reason: string } => {
-    // Different probabilities for different transport types
-    const delayProbability = {
-      '🚌': 0.35,  // Buss - 35% chance
-      '🚈': 0.25,  // Bybanen - 25% chance
-      '🛳️': 0.30,  // Ferge - 30% chance
-      '🚕': 0.20,  // Taxi - 20% chance
-      '🚶‍♂️': 0.05, // Walking - 5% chance (weather)
-      '🚲': 0.10,  // Sykkel - 10% chance
-    };
-
-    const reasons = {
-      '🚌': ['trafikk', 'høy pågang', 'tekniske problemer', 'veistengning'],
-      '🚈': ['signalproblemer', 'forsinkelse fra tidligere stopp', 'teknisk vedlikehold', 'trafikkork'],
-      '🛳️': ['værforhold', 'høy trafikk i havnen', 'tekniske problemer', 'forsinkelse fra forrige rute'],
-      '🚕': ['trafikk', 'omvei', 'høy etterspørsel'],
-      '🚶‍♂️': ['dårlig vær', 'høy fotgjengertrafikk'],
-      '🚲': ['dårlig vær', 'stengt sykkelvei', 'tekniske problemer'],
-    };
-
-    const probability = delayProbability[transportMode] || 0.15;
-    const hasDelay = Math.random() < probability;
-    
-    if (!hasDelay) {
-      return { hasDelay: false, delay: 0, reason: '' };
-    }
-
-    const delayMinutes = Math.floor(Math.random() * 12) + 2; // 2-13 minutes
-    const reasonList = reasons[transportMode] || ['forsinkelse'];
-    const reason = reasonList[Math.floor(Math.random() * reasonList.length)];
-
-    return { hasDelay: true, delay: delayMinutes, reason };
-  };
+  // Memoize route destinations
+  const routeDestinations = useMemo(() => {
+    return localRouteOrder
+      .map(id => destinations.find(d => d.id === id))
+      .filter(Boolean) as Destination[];
+  }, [localRouteOrder, destinations]);
 
   // Generate delays for all transport modes (memoize to avoid regeneration on re-render)
   const [transportDelays] = useState(() => 
     route.transportModes.map(mode => generateDelayForTransport(mode))
   );
 
-  // Check if there's any delay on the route
-  const hasAnyDelay = transportDelays.some(d => d.hasDelay);
-  const totalDelay = transportDelays.reduce((sum, d) => sum + d.delay, 0);
+  // Memoize delay calculations
+  const hasAnyDelay = useMemo(
+    () => transportDelays.some(d => d.hasDelay),
+    [transportDelays]
+  );
+  
+  const totalDelay = useMemo(
+    () => transportDelays.reduce((sum, d) => sum + d.delay, 0),
+    [transportDelays]
+  );
+
+  const moveDestinationUp = useCallback((index: number) => {
+    if (index <= 1) return; // Can't move start or above start
+    setLocalRouteOrder(prev => {
+      const newOrder = [...prev];
+      [newOrder[index], newOrder[index - 1]] = [newOrder[index - 1], newOrder[index]];
+      onReorderRoute?.(newOrder);
+      return newOrder;
+    });
+  }, [onReorderRoute]);
+
+  const moveDestinationDown = useCallback((index: number) => {
+    setLocalRouteOrder(prev => {
+      if (index >= prev.length - 2) return prev; // Can't move last or below last
+      const newOrder = [...prev];
+      [newOrder[index], newOrder[index + 1]] = [newOrder[index + 1], newOrder[index]];
+      onReorderRoute?.(newOrder);
+      return newOrder;
+    });
+  }, [onReorderRoute]);
+
+  const handleShowMap = useCallback(() => {
+    setShowMap(true);
+  }, []);
+
+  const handleCloseMap = useCallback(() => {
+    setShowMap(false);
+  }, []);
+
+  const handleCloseTicket = useCallback(() => {
+    setShowTicket(false);
+  }, []);
+
+  const handleShowTicketOverview = useCallback(() => {
+    setShowTicketOverview(true);
+  }, []);
+
+  const handleCloseTicketOverview = useCallback(() => {
+    setShowTicketOverview(false);
+  }, []);
 
   if (showMap) {
-    return <MapView route={route} destinations={destinations} onClose={() => setShowMap(false)} />;
+    return <MapView route={route} destinations={destinations} onClose={handleCloseMap} />;
   }
 
   if (showTicket) {
-    return <TicketView route={route} destinations={destinations} onClose={() => setShowTicket(false)} />;
+    return <TicketView route={route} destinations={destinations} onClose={handleCloseTicket} />;
   }
 
   return (
@@ -274,7 +325,9 @@ export default function RouteVisualization({ route, destinations, onBack, onPurc
             const isFirst = index === 0;
             const isLast = index === routeDestinations.length - 1;
             const transportMode = !isLast ? route.transportModes[index] : null;
-            const legTime = !isLast ? Math.floor(route.totalTime / (routeDestinations.length - 1)) : 0;
+            const legTime = !isLast && routeDestinations.length > 1 
+              ? Math.floor(route.totalTime / (routeDestinations.length - 1)) 
+              : 0;
 
             return (
               <React.Fragment key={dest.id}>
@@ -327,12 +380,7 @@ export default function RouteVisualization({ route, destinations, onBack, onPurc
                             )}
                           </div>
                           <p className="text-xs text-gray-500">
-                            {transportMode === '🚶‍♂️' && 'Gå'}
-                            {transportMode === '🚌' && 'Buss'}
-                            {transportMode === '🚈' && 'Bybanen'}
-                            {transportMode === '🚲' && 'Sykkel'}
-                            {transportMode === '🛳️' && 'Ferge'}
-                            {transportMode === '🚕' && 'Taxi'}
+                            {TRANSPORT_LABELS[transportMode] || transportMode}
                           </p>
                           {delayInfo.hasDelay && (
                             <motion.p 
@@ -359,7 +407,7 @@ export default function RouteVisualization({ route, destinations, onBack, onPurc
       <div className="p-4 bg-white/80 backdrop-blur-xl border-t border-gray-100 space-y-2">
         {/* Ticket button */}
         <motion.button 
-          onClick={() => setShowTicketOverview(true)}
+          onClick={handleShowTicketOverview}
           className="w-full py-2.5 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-2xl shadow-lg active:shadow-xl active:opacity-90 transition-all flex items-center justify-center gap-2"
           whileTap={{ scale: 0.98 }}
           whileHover={{ scale: 1.02 }}
@@ -370,7 +418,7 @@ export default function RouteVisualization({ route, destinations, onBack, onPurc
 
         {/* Navigation button */}
         <motion.button 
-          onClick={() => setShowMap(true)}
+          onClick={handleShowMap}
           className="w-full py-2.5 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-2xl shadow-lg active:shadow-xl active:opacity-90 transition-all text-center"
           whileTap={{ scale: 0.98 }}
           whileHover={{ scale: 1.02 }}
@@ -382,7 +430,7 @@ export default function RouteVisualization({ route, destinations, onBack, onPurc
       {/* Ticket Overview Modal */}
       <TicketOverview
         isOpen={showTicketOverview}
-        onClose={() => setShowTicketOverview(false)}
+        onClose={handleCloseTicketOverview}
         plannedTravelTime={route.totalTime}
         onPurchaseTicket={onPurchaseTicket}
       />

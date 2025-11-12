@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface ParticleEffectProps {
@@ -10,27 +10,75 @@ interface ParticleEffectProps {
 
 interface Particle {
   id: number;
-  angle: number;
-  distance: number;
+  endX: number;
+  endY: number;
   size: number;
 }
 
-export default function ParticleEffect({ x, y, color, trigger }: ParticleEffectProps) {
+// Constants
+const PARTICLE_COUNT = 12;
+const FULL_CIRCLE = 360;
+const DISTANCE_MIN = 50;
+const DISTANCE_RANGE = 30;
+const SIZE_MIN = 4;
+const SIZE_RANGE = 4;
+const CLEANUP_DELAY = 600;
+const GLOW_SIZE = 8;
+
+// Animation constants
+const ANIMATION_TRANSITION = {
+  duration: 0.6,
+  ease: 'easeOut' as const,
+};
+
+const INITIAL_STATE = { x: 0, y: 0, scale: 1, opacity: 1 };
+const EXIT_STATE = { opacity: 0 };
+
+function ParticleEffect({ x, y, color, trigger }: ParticleEffectProps) {
   const [particles, setParticles] = useState<Particle[]>([]);
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     if (trigger > 0) {
-      const newParticles: Particle[] = Array.from({ length: 12 }, (_, i) => ({
-        id: Date.now() + i,
-        angle: (i / 12) * 360,
-        distance: 50 + Math.random() * 30,
-        size: 4 + Math.random() * 4,
-      }));
+      // Generate particles with pre-calculated end positions
+      const newParticles: Particle[] = Array.from({ length: PARTICLE_COUNT }, (_, i) => {
+        const angle = (i / PARTICLE_COUNT) * FULL_CIRCLE;
+        const rad = (angle * Math.PI) / 180;
+        const distance = DISTANCE_MIN + Math.random() * DISTANCE_RANGE;
+        
+        return {
+          id: Date.now() + i,
+          endX: Math.cos(rad) * distance,
+          endY: Math.sin(rad) * distance,
+          size: SIZE_MIN + Math.random() * SIZE_RANGE,
+        };
+      });
+      
       setParticles(newParticles);
 
-      setTimeout(() => setParticles([]), 600);
+      // Clear existing timeout if any
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+
+      // Set new timeout
+      timeoutRef.current = setTimeout(() => {
+        setParticles([]);
+        timeoutRef.current = null;
+      }, CLEANUP_DELAY);
     }
+
+    // Cleanup timeout on unmount or when trigger changes
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
+    };
   }, [trigger]);
+
+  // Memoize box shadow style
+  const boxShadowStyle = `0 0 ${GLOW_SIZE}px ${color}`;
 
   return (
     <div
@@ -38,34 +86,30 @@ export default function ParticleEffect({ x, y, color, trigger }: ParticleEffectP
       style={{ left: x, top: y }}
     >
       <AnimatePresence>
-        {particles.map((particle) => {
-          const rad = (particle.angle * Math.PI) / 180;
-          const endX = Math.cos(rad) * particle.distance;
-          const endY = Math.sin(rad) * particle.distance;
-
-          return (
-            <motion.div
-              key={particle.id}
-              initial={{ x: 0, y: 0, scale: 1, opacity: 1 }}
-              animate={{
-                x: endX,
-                y: endY,
-                scale: 0,
-                opacity: 0,
-              }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.6, ease: 'easeOut' }}
-              className="absolute rounded-full"
-              style={{
-                width: particle.size,
-                height: particle.size,
-                backgroundColor: color,
-                boxShadow: `0 0 8px ${color}`,
-              }}
-            />
-          );
-        })}
+        {particles.map((particle) => (
+          <motion.div
+            key={particle.id}
+            initial={INITIAL_STATE}
+            animate={{
+              x: particle.endX,
+              y: particle.endY,
+              scale: 0,
+              opacity: 0,
+            }}
+            exit={EXIT_STATE}
+            transition={ANIMATION_TRANSITION}
+            className="absolute rounded-full"
+            style={{
+              width: particle.size,
+              height: particle.size,
+              backgroundColor: color,
+              boxShadow: boxShadowStyle,
+            }}
+          />
+        ))}
       </AnimatePresence>
     </div>
   );
 }
+
+export default React.memo(ParticleEffect);
