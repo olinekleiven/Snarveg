@@ -7,37 +7,72 @@ import { TRANSPORT_MODE_EMOJIS } from './constants';
 export function buildRouteFromConnections(connections: Connection[]): Route | null {
   if (connections.length === 0) return null;
 
-  // Build ordered route starting from 'home'
-  const route: string[] = ['home'];
-  let current = 'home';
-  const visited = new Set(['home']);
+  const allNodes = new Set<string>();
+  const incomingCount = new Map<string, number>();
+  const outgoingCount = new Map<string, number>();
+
+  connections.forEach(conn => {
+    allNodes.add(conn.from);
+    allNodes.add(conn.to);
+    incomingCount.set(conn.to, (incomingCount.get(conn.to) ?? 0) + 1);
+    outgoingCount.set(conn.from, (outgoingCount.get(conn.from) ?? 0) + 1);
+  });
+
+  let start: string | null = null;
+
+  start = Array.from(allNodes).find(node => (incomingCount.get(node) ?? 0) === 0 && (outgoingCount.get(node) ?? 0) > 0) ?? null;
+
+  if (!start) {
+    start = connections[0]?.from ?? null;
+  }
+
+  if (!start) return null;
+
+  const route: string[] = [start];
+  const visitedNodes = new Set<string>([start]);
+  const visitedConnections = new Set<number>();
+  const orderedConnections: Connection[] = [];
+
+  let current = start;
 
   while (true) {
-    const nextConn = connections.find(
-      c => (c.from === current && !visited.has(c.to)) || 
-           (c.to === current && !visited.has(c.from))
+    const nextIndex = connections.findIndex(
+      (conn, idx) =>
+        !visitedConnections.has(idx) &&
+        conn.from === current &&
+        !visitedNodes.has(conn.to)
     );
 
-    if (!nextConn) break;
+    if (nextIndex === -1) break;
 
-    const next = nextConn.from === current ? nextConn.to : nextConn.from;
-    route.push(next);
-    visited.add(next);
-    current = next;
+    const nextConn = connections[nextIndex];
+    visitedConnections.add(nextIndex);
+
+    const nextNode = nextConn.to;
+    orderedConnections.push(nextConn);
+    route.push(nextNode);
+    visitedNodes.add(nextNode);
+    current = nextNode;
   }
 
   if (route.length < 2) return null;
 
-  const transportModes = connections
-    .slice(0, route.length - 1)
-    .map(c => c.transportMode || '🚶‍♂️');
+  const transportModes = orderedConnections.map(conn => conn.transportMode || '🚶‍♂️');
+
+  const baseTime = 12;
+  const timePerLeg = 8;
+  const baseDistance = 3;
+  const distancePerLeg = 2.5;
+
+  const totalTime = Math.round(baseTime + orderedConnections.length * timePerLeg);
+  const totalDistance = Number((baseDistance + orderedConnections.length * distancePerLeg).toFixed(1));
 
   return {
     id: `route-${Date.now()}`,
     destinations: route,
     transportModes,
-    totalTime: Math.floor(Math.random() * 60) + 20,
-    totalDistance: Math.floor(Math.random() * 15) + 3,
+    totalTime,
+    totalDistance,
   };
 }
 

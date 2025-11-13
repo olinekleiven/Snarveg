@@ -270,14 +270,16 @@ export default function App() {
     }
   };
 
-  const handleBackToWheel = () => {
+  const handleCancelRoute = () => {
     setViewMode('wheel');
     setCurrentRoute(null);
-    // Keep connections so user can continue building the route
+    setConnections([]);
   };
 
   const handleClearConnections = () => {
     setConnections([]);
+    setCurrentRoute(null);
+    setViewMode('wheel');
   };
 
   const handleReorderRoute = (newOrder: string[]) => {
@@ -311,7 +313,7 @@ export default function App() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 overflow-hidden relative">
       <AnimatedBackground />
-      <TopBar 
+          <TopBar 
         onSettingsClick={() => {
           // CRITICAL: Clear all connections when settings opens
           handleClearConnections();
@@ -319,7 +321,7 @@ export default function App() {
         }} 
         onResetRoute={handleClearConnections}
         hasConnections={connections.length > 0}
-        onBackClick={() => setViewMode('wheel')}
+            onBackClick={viewMode === 'route' ? handleCancelRoute : undefined}
         showBackButton={viewMode === 'route'}
       />
 
@@ -435,7 +437,7 @@ export default function App() {
               <RouteVisualization
                 route={currentRoute}
                 destinations={destinations}
-                onBack={handleBackToWheel}
+                onBack={handleCancelRoute}
                 onPurchaseTicket={handlePurchaseTicket}
                 onEditDestination={(destination) => {
                   setEditingDestination(destination);

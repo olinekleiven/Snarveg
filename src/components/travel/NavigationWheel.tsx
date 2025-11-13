@@ -401,51 +401,23 @@ export default function NavigationWheel({
   // Helper function to check if a node can start a drawing
   const canNodeStartDrawing = useCallback((nodeId: string): { allowed: boolean; message?: string } => {
     const destination = destinations.find(d => d.id === nodeId);
-    
-    // Check if target node is empty (isEmpty or has no name)
-    if (destination?.isEmpty || !destination?.label || destination?.label.trim() === '' || destination?.label === 'Legg til sted') {
+
+    if (!destination) {
       return {
         allowed: false,
-        message: 'Du kan ikke koble til en tom node. Fyll inn node først!',
+        message: 'Fann ikkje denne noden',
       };
     }
-    
-    const isHomeNode = nodeId === 'home';
-    
-    // If no connections exist yet, only home can start drawing
-    if (connections.length === 0) {
-      return {
-        allowed: isHomeNode,
-        message: isHomeNode ? undefined : 'Start reisen fra din posisjon (senteret)',
-      };
-    }
-    
-    // Check if home already has ANY connection (locked or unlocked)
-    // Home node can ONLY draw once - to the first destination
-    if (isHomeNode) {
-      const homeHasAnyConnection = connections.some(c => c.from === 'home' || c.to === 'home');
-      if (homeHasAnyConnection) {
-        return {
-          allowed: false,
-          message: 'Fortsett reisen fra den noden du kobla til! Min posisjon kan kun koble til første stad.',
-        };
-      }
-      return { allowed: true };
-    }
-    
-    // For other nodes, they can draw if they are being pointed TO
-    // A node needs to be the destination (to) of at least one connection
-    const isPointedTo = connections.some(c => c.to === nodeId);
-    
-    if (!isPointedTo) {
+
+    // Block drawing from empty/placeholder nodes
+    if (destination.isEmpty || !destination.label || destination.label.trim() === '' || destination.label === 'Legg til sted') {
       return {
         allowed: false,
-        message: 'Ein node må bli peikt på før den kan peike vidare',
+        message: 'Du kan ikkje starte frå ein tom node. Vel eit stad først!',
       };
     }
-    
-    // Check if this node already has an outgoing connection (from this node)
-    // Each node can only point to ONE other node
+
+    // Prevent multiple outgoing connections from the same node
     const hasOutgoingConnection = connections.some(c => c.from === nodeId);
     if (hasOutgoingConnection) {
       return {
@@ -453,7 +425,7 @@ export default function NavigationWheel({
         message: 'Denne noden har allereie ein forbindelse vidare',
       };
     }
-    
+
     return { allowed: true };
   }, [destinations, connections]);
 
