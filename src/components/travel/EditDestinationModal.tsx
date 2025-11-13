@@ -29,6 +29,7 @@ const EMOJI_OPTIONS = [
 ] as const;
 
 const COLOR_OPTIONS = [
+  // Rad 1: Standardfarger (8 farger)
   { name: 'Purple', value: '#8B5CF6' },
   { name: 'Blue', value: '#3B82F6' },
   { name: 'Green', value: '#10B981' },
@@ -37,6 +38,16 @@ const COLOR_OPTIONS = [
   { name: 'Pink', value: '#EC4899' },
   { name: 'Cyan', value: '#06B6D4' },
   { name: 'Indigo', value: '#6366F1' },
+  
+  // Rad 2: Pastellfarger (8 farger)
+  { name: 'Pastell Rosa', value: '#FBCFE8' },
+  { name: 'Mint', value: '#6EE7B7' },
+  { name: 'Lys Fersken', value: '#FED7AA' },
+  { name: 'Lavendel', value: '#C4B5FD' },
+  { name: 'Pudderblå', value: '#BFDBFE' },
+  { name: 'Pastellgul', value: '#FEF3C7' },
+  { name: 'Lys Turkis', value: '#A7F3D0' },
+  { name: 'Lys Lilla', value: '#E9D5FF' },
 ] as const;
 
 const DEFAULT_EMOJI = '📍';

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { Clock, Navigation, AlertCircle, MapPin, Ticket, ChevronUp, ChevronDown } from 'lucide-react';
+import { Clock, Navigation, AlertCircle, MapPin, Ticket, ChevronUp, ChevronDown, Bike } from 'lucide-react';
 import { Route, Destination } from './types';
 import MapView from './MapView';
 import TicketView from './TicketView';
@@ -366,7 +366,11 @@ export default function RouteVisualization({ route, destinations, onPurchaseTick
                           transition={{ delay: index * 0.15 + 0.3, type: 'spring' }}
                           whileHover={{ scale: 1.1 }}
                         >
-                          {transportMode}
+                          {transportMode === '🚲' ? (
+                            <Bike className="w-5 h-5 text-white" />
+                          ) : (
+                            transportMode
+                          )}
                         </motion.div>
                         <div className="flex-1">
                           <div className="flex items-center gap-2">

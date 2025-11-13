@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Navigation, Clock, TrendingUp, Zap, MapPin, X } from 'lucide-react';
+import { Navigation, Clock, TrendingUp, Zap, MapPin, X, Bike } from 'lucide-react';
 import { Route, Destination } from './types';
 
 interface MapViewProps {
@@ -536,7 +536,11 @@ function MapView({ route, destinations, onClose }: MapViewProps) {
                           >
                             <div className="flex items-center gap-3">
                               <div className="w-9 h-9 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center text-lg shadow-md">
-                                {transportMode}
+                                {transportMode === '🚲' ? (
+                                  <Bike className="w-5 h-5 text-white" />
+                                ) : (
+                                  transportMode
+                                )}
                               </div>
                               <div className="flex-1">
                                 <p className="text-sm text-gray-900">{legTime} min</p>
