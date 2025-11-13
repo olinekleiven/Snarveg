@@ -1288,7 +1288,7 @@ export default function NavigationWheel({
           animate={{ opacity: 1 }}
           className="absolute top-8 left-1/2 -translate-x-1/2 text-center"
         >
-          <p className="text-gray-500 text-sm">Trekk linje fra din posisjon, til der du vil</p>
+          <p className="text-gray-500 text-sm">Trekk linje fra start- til sluttposisjon</p>
         </motion.div>
       )}
 
