@@ -187,7 +187,7 @@ export default function TicketOverview({ isOpen, onClose, plannedTravelTime, onP
           exit={{ y: '100%', opacity: 0 }}
           transition={{ type: 'spring', damping: 30, stiffness: 300 }}
           onClick={(e) => e.stopPropagation()}
-          className="bg-white w-full max-w-2xl max-h-[90vh] rounded-t-3xl sm:rounded-3xl overflow-hidden flex flex-col shadow-2xl"
+          className="bg-white w-full max-w-2xl max-h-[85vh] sm:max-h-[90vh] rounded-t-3xl sm:rounded-3xl overflow-hidden flex flex-col shadow-2xl mb-4 sm:mb-0"
         >
           {/* Header */}
           <div className="sticky top-0 bg-gradient-to-br from-blue-500 via-indigo-600 to-purple-600 text-white p-6 flex items-center justify-between z-10">

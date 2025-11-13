@@ -324,7 +324,8 @@ export default function App() {
       />
 
       {/* Ticket button - top left */}
-      {viewMode === 'wheel' && (
+      {/* Hide ticket button when settings modal is open */}
+      {viewMode === 'wheel' && !isSettingsOpen && (
         <div className="fixed top-8 left-4 z-[100]">
           <TicketButton 
             hasActiveTicket={hasActiveTicket}

@@ -242,17 +242,34 @@ export default function NavigationWheel({
         setPointerStartPos({ x: e.clientX, y: e.clientY });
         setPointerDownNodeId(nodeId);
         
-        // Start dragging immediately - tap detection happens on pointer up
-        const angle = computedAngles.get(nodeId) ?? dest.position.angle;
-        const startPos = { x: e.clientX - rect.left, y: e.clientY - rect.top };
-        setDraggingNodeId(nodeId);
-        setDragStartPos(startPos);
-        setDragCurrentPos(startPos); // Initialize current pos to start pos
-        setDragStartAngle(angle);
+        // CRITICAL: For touch devices, add a small delay before starting drag
+        // This prevents accidental drags when user just wants to tap
+        const isTouch = e.pointerType === 'touch';
+        const startDrag = () => {
+          const angle = computedAngles.get(nodeId) ?? dest.position.angle;
+          const startPos = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+          setDraggingNodeId(nodeId);
+          setDragStartPos(startPos);
+          setDragCurrentPos(startPos); // Initialize current pos to start pos
+          setDragStartAngle(angle);
+          
+          // Set pointer capture on the container for smooth dragging
+          if (containerRef.current) {
+            containerRef.current.setPointerCapture(e.pointerId);
+          }
+          
+          // Provide haptic feedback when drag starts on touch
+          if (isTouch && navigator.vibrate) {
+            navigator.vibrate(20);
+          }
+        };
         
-        // Set pointer capture on the container for smooth dragging
-        if (containerRef.current) {
-          containerRef.current.setPointerCapture(e.pointerId);
+        if (isTouch) {
+          // Small delay for touch to distinguish tap from drag
+          setTimeout(startDrag, 50);
+        } else {
+          // Start dragging immediately for mouse
+          startDrag();
         }
       }
       return;
@@ -463,6 +480,10 @@ export default function NavigationWheel({
       
       // Check if hovering over another node to swap positions
       // Use getNodeScreenPosition to get exact node position (includes correct offset)
+      // CRITICAL: Use larger hit radius for touch devices (80px) vs mouse (60px)
+      const isTouch = e.pointerType === 'touch';
+      const hitRadius = isTouch ? 80 : 60; // Larger hit area for touch screens
+      
       const hoveredDest = otherNodes.find(dest => {
         if (dest.id === draggingNodeId || dest.isCenter || dest.isEmpty || dest.label === 'Legg til sted') {
           return false;
@@ -474,11 +495,15 @@ export default function NavigationWheel({
         const dy = mouseY - nodePos.y;
         const distance = Math.sqrt(dx * dx + dy * dy);
         
-        return distance < 50; // 50px hit radius
+        return distance < hitRadius; // Larger hit radius for touch devices
       });
       
       if (hoveredDest) {
         setHoveredSwapNodeId(hoveredDest.id);
+        // Provide haptic feedback on touch when hovering over swap target
+        if (isTouch && navigator.vibrate) {
+          navigator.vibrate(10); // Subtle vibration feedback
+        }
       } else {
         setHoveredSwapNodeId(null);
       }
@@ -650,6 +675,10 @@ export default function NavigationWheel({
       }
       
       // Check if this was a tap (not a drag) to open edit modal
+      // CRITICAL: Use larger threshold for touch devices to prevent accidental drags
+      const isTouch = e.pointerType === 'touch';
+      const tapThreshold = isTouch ? 15 : 10; // Larger threshold for touch
+      
       if (pointerDownNodeId && pointerStartPos && !draggingNodeId) {
         const dest = destinations.find(d => d.id === pointerDownNodeId);
         if (dest && !dest.isCenter && !dest.isEmpty && dest.label !== 'Legg til sted') {
@@ -657,8 +686,8 @@ export default function NavigationWheel({
           const dy = e.clientY - pointerStartPos.y;
           const distance = Math.sqrt(dx * dx + dy * dy);
           
-          // If moved less than 10px, treat as tap
-          if (distance < 10 && onNodeClick) {
+          // If moved less than threshold, treat as tap
+          if (distance < tapThreshold && onNodeClick) {
             onNodeClick(dest);
             if (navigator.vibrate) {
               navigator.vibrate(50);
