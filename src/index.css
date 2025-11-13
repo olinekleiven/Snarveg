@@ -3,8 +3,9 @@
 @tailwind utilities;
 
 :root {
-  /* Line Y-calibration offset - adjust in devtools for live tuning (test 38, 40, 42) */
-  --line-y-cal: 40;
+  /* Line Y-calibration offset - adjust in devtools for live tuning */
+  /* Increased to 60px to center lines better in nodes */
+  --line-y-cal: 60;
 }
 
 @layer base {

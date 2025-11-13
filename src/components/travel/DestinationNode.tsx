@@ -258,7 +258,12 @@ function DestinationNode({
       {isEditMode && !isCenter && !destination.isEmpty && destination.label !== 'Legg til sted' && (
         <motion.button
           onClick={handleDeleteClick}
-          className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-red-500 hover:bg-red-600 flex items-center justify-center text-white shadow-lg z-10"
+          onPointerDown={(e) => {
+            e.stopPropagation();
+            // Call onDeleteClick directly to ensure it fires even if parent's onPointerDown intercepts
+            onDeleteClick?.(e as any);
+          }}
+          className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-red-500 hover:bg-red-600 flex items-center justify-center text-white shadow-lg z-50 pointer-events-auto"
           whileHover={{ scale: 1.1 }}
           whileTap={{ scale: 0.9 }}
           initial={{ scale: 0 }}

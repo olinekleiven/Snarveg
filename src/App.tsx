@@ -106,26 +106,42 @@ export default function App() {
   };
 
   const handleConnectionCreate = (from: string, to: string) => {
-    // Check if connection already exists
-    if (connectionExists(connections, from, to)) {
-      console.log('Connection already exists');
-      return;
-    }
+    setConnections(prev => {
+      // First, remove any duplicates that might have snuck in (defensive programming)
+      // Check BOTH directions to prevent duplicates
+      const seen = new Set<string>();
+      const deduplicated = prev.filter(conn => {
+        const key = `${conn.from}-${conn.to}`;
+        const reverseKey = `${conn.to}-${conn.from}`;
+        if (seen.has(key) || seen.has(reverseKey)) {
+          return false; // Duplicate found (either direction)
+        }
+        seen.add(key);
+        seen.add(reverseKey);
+        return true;
+      });
 
-    // Check if the FROM node already has an outgoing connection
-    if (hasOutgoingConnection(connections, from)) {
-      console.log(`Node ${from} already has an outgoing connection`);
-      return;
-    }
+      // Check if connection already exists in BOTH directions (after deduplication)
+      const existsForward = connectionExists(deduplicated, from, to);
+      const existsReverse = connectionExists(deduplicated, to, from);
+      if (existsForward || existsReverse) {
+        return deduplicated; // Return deduplicated array
+      }
 
-    const randomTransport = getRandomTransportMode();
-    setConnections([...connections, { 
-      from, 
-      to, 
-      isLocked: false,
-      transportMode: randomTransport,
-      createdAt: Date.now()
-    }]);
+      // Check if the FROM node already has an outgoing connection
+      if (hasOutgoingConnection(deduplicated, from)) {
+        return deduplicated; // Return deduplicated array
+      }
+
+      const randomTransport = getRandomTransportMode();
+      return [...deduplicated, { 
+        from, 
+        to, 
+        isLocked: false,
+        transportMode: randomTransport,
+        createdAt: Date.now()
+      }];
+    });
   };
 
   const handleConnectionLock = (from: string, to: string) => {
@@ -296,7 +312,11 @@ export default function App() {
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 overflow-hidden relative">
       <AnimatedBackground />
       <TopBar 
-        onSettingsClick={() => setIsSettingsOpen(true)} 
+        onSettingsClick={() => {
+          // CRITICAL: Clear all connections when settings opens
+          handleClearConnections();
+          setIsSettingsOpen(true);
+        }} 
         onResetRoute={handleClearConnections}
         hasConnections={connections.length > 0}
         onBackClick={() => setViewMode('wheel')}

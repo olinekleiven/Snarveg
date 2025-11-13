@@ -37,12 +37,12 @@ export default function NavigationWheel({
   const svgRef = useRef<SVGSVGElement>(null);
   const wheelContainerRef = useRef<HTMLDivElement>(null); // Ref for the wheel container (with pt-28)
   
-  // LINE_Y_CAL brukes for visuell kalibrering av linjer (40px ned for perfekt sentrering).
+  // LINE_Y_CAL brukes for visuell kalibrering av linjer (60px ned for perfekt sentrering).
   // Endre verdien for å finjustere senterposisjon etter behov.
   // Global Y-calibration offset for all line endpoints
   // Adjusts all line start/end points downward to match visual node centers
   // Can be tuned via CSS variable --line-y-cal for live adjustment in devtools
-  const LINE_Y_CAL = 40; // Endelig vertikal kalibrering for linjer (flytter alt 40px ned)
+  const LINE_Y_CAL = 60; // Endelig vertikal kalibrering for linjer (flytter alt 60px ned for perfekt sentrering i midten av nodene)
   
   const [isDrawing, setIsDrawing] = useState(false);
   const [drawStart, setDrawStart] = useState<{ id: string; x: number; y: number } | null>(null);
@@ -59,6 +59,9 @@ export default function NavigationWheel({
   const [longPressNodeId, setLongPressNodeId] = useState<string | null>(null);
   const [pointerStartPos, setPointerStartPos] = useState<{ x: number; y: number } | null>(null);
   const [pointerDownNodeId, setPointerDownNodeId] = useState<string | null>(null);
+  const connectionCreatedRef = useRef<boolean>(false); // Track if connection was created in this drag session
+  const isProcessingConnectionRef = useRef<boolean>(false); // Guard against multiple simultaneous connection creations
+  const pendingConnectionRef = useRef<{ from: string; to: string } | null>(null); // Track pending connection to prevent duplicate rendering
   
   // Performance: Cache LINE_Y_CAL value to avoid getComputedStyle calls on every move
   const lineYCalRef = useRef<number>(LINE_Y_CAL);
@@ -74,14 +77,14 @@ export default function NavigationWheel({
     return () => clearInterval(interval);
   }, []);
   
-  // Throttle pointer move events for better performance
+  // Track animation frame for smooth drawCurrent updates
   const lastMoveTimeRef = useRef<number>(0);
-  const THROTTLE_DELAY = 16; // ~60fps
   
   // Edit mode state
   const [draggingNodeId, setDraggingNodeId] = useState<string | null>(null);
   const [dragStartPos, setDragStartPos] = useState<{ x: number; y: number } | null>(null);
   const [dragStartAngle, setDragStartAngle] = useState<number | null>(null);
+  const [dragCurrentPos, setDragCurrentPos] = useState<{ x: number; y: number } | null>(null);
   const [hoveredSwapNodeId, setHoveredSwapNodeId] = useState<string | null>(null);
   const [swapAnimation, setSwapAnimation] = useState<{ from: string; to: string } | null>(null);
 
@@ -112,6 +115,27 @@ export default function NavigationWheel({
   
   // Check if we've reached the maximum limit (count only filled destinations, not empty "+" nodes)
   const hasReachedMax = useMemo(() => filledNodes.length >= maxDestinations, [filledNodes, maxDestinations]);
+
+  // Memoize unique connections to prevent duplicate rendering
+  // This is the SINGLE SOURCE OF TRUTH for rendering connections
+  const uniqueConnections = useMemo(() => {
+    const seen = new Set<string>();
+    const unique: Connection[] = [];
+    
+    for (const conn of connections) {
+      const key = `${conn.from}-${conn.to}`;
+      const reverseKey = `${conn.to}-${conn.from}`;
+      
+      // Check both directions to prevent duplicates
+      if (!seen.has(key) && !seen.has(reverseKey)) {
+        seen.add(key);
+        seen.add(reverseKey);
+        unique.push(conn);
+      }
+    }
+    
+    return unique;
+  }, [connections]);
 
   const getNodePosition = (angle: number, radius: number) => {
     const rad = (angle * Math.PI) / 180;
@@ -220,8 +244,10 @@ export default function NavigationWheel({
         
         // Start dragging immediately - tap detection happens on pointer up
         const angle = computedAngles.get(nodeId) ?? dest.position.angle;
+        const startPos = { x: e.clientX - rect.left, y: e.clientY - rect.top };
         setDraggingNodeId(nodeId);
-        setDragStartPos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+        setDragStartPos(startPos);
+        setDragCurrentPos(startPos); // Initialize current pos to start pos
         setDragStartAngle(angle);
         
         // Set pointer capture on the container for smooth dragging
@@ -312,13 +338,25 @@ export default function NavigationWheel({
     // Apply Y-calibration offset to line endpoints (use cached value)
     const dy = lineYCalRef.current;
     
+    // Reset processing flags when starting new drawing
+    connectionCreatedRef.current = false;
+    isProcessingConnectionRef.current = false;
+    
     setIsDrawing(true);
     setDrawStart({ id: nodeId, x: nodePos.x, y: nodePos.y + dy });
     setDrawCurrent({ x: nodePos.x, y: nodePos.y + dy });
   };
 
-  // Helper function to reset all drawing state
+  // Helper function to reset all drawing state COMPLETELY
+  // CRITICAL: This must clear EVERYTHING to prevent hanging lines/arrows
   const resetDrawingState = useCallback(() => {
+    // Cancel any pending animation frames FIRST
+    if (lastMoveTimeRef.current) {
+      cancelAnimationFrame(lastMoveTimeRef.current);
+      lastMoveTimeRef.current = 0;
+    }
+    
+    // Clear all drawing state
     setIsDrawing(false);
     setDrawStart(null);
     setDrawCurrent(null);
@@ -326,7 +364,22 @@ export default function NavigationWheel({
     setLockProgress(0);
     setHoverStartTime(null);
     setLockingConnection(null);
-  }, []);
+    
+    // Clear all refs and flags
+    connectionCreatedRef.current = false;
+    isProcessingConnectionRef.current = false;
+    pendingConnectionRef.current = null;
+    
+    // Clear all timers
+    if (hoverTimer) {
+      clearTimeout(hoverTimer);
+      setHoverTimer(null);
+    }
+    if (hoverProgressIntervalRef.current) {
+      clearInterval(hoverProgressIntervalRef.current);
+      hoverProgressIntervalRef.current = null;
+    }
+  }, [hoverTimer]);
 
   // Helper function to check if a node can start a drawing
   const canNodeStartDrawing = useCallback((nodeId: string): { allowed: boolean; message?: string } => {
@@ -398,12 +451,15 @@ export default function NavigationWheel({
   }, [destinations, onNodeClick]);
 
   const handlePointerMove = (e: React.PointerEvent) => {
-    // Handle drag-and-drop in edit mode - only allow swapping, not free movement
+    // Handle drag-and-drop in edit mode - allow visual dragging and swapping
     if (isEditMode && draggingNodeId && dragStartPos && dragStartAngle !== null && containerRef.current) {
       // Use same rect as getNodeScreenPosition() for coordinate system consistency
       const rect = containerRef.current.getBoundingClientRect();
       const mouseX = e.clientX - rect.left;
       const mouseY = e.clientY - rect.top;
+      
+      // Update current drag position for visual feedback
+      setDragCurrentPos({ x: mouseX, y: mouseY });
       
       // Check if hovering over another node to swap positions
       // Use getNodeScreenPosition to get exact node position (includes correct offset)
@@ -426,7 +482,6 @@ export default function NavigationWheel({
       } else {
         setHoveredSwapNodeId(null);
       }
-      // Don't allow free movement - only swapping is allowed
       return;
     }
     
@@ -443,7 +498,9 @@ export default function NavigationWheel({
       }
     }
     
-    if (!isDrawing || !containerRef.current || !drawStart) return;
+    // CRITICAL: Don't allow drawing if connection was already created in this session
+    // Also check if we're processing a connection to prevent overlapping
+    if (!isDrawing || !containerRef.current || !drawStart || connectionCreatedRef.current || isProcessingConnectionRef.current) return;
 
     const rect = containerRef.current.getBoundingClientRect();
     // Mouse position relative to container (matches SVG coordinate system)
@@ -455,15 +512,21 @@ export default function NavigationWheel({
     // Apply Y-calibration offset to line endpoints (use cached value)
     const dy = lineYCalRef.current;
     
-    // Throttle state updates for better performance
-    const now = Date.now();
-    if (now - lastMoveTimeRef.current < THROTTLE_DELAY) {
-      // Skip this update if too soon since last one
-      return;
+    // Update drawCurrent immediately for smooth, responsive line following
+    // Use requestAnimationFrame for smooth updates without blocking
+    if (!lastMoveTimeRef.current) {
+      lastMoveTimeRef.current = requestAnimationFrame(() => {
+        setDrawCurrent({ x: mousePos.x, y: mousePos.y + dy });
+        lastMoveTimeRef.current = 0;
+      });
+    } else {
+      // Cancel previous frame and schedule new one
+      cancelAnimationFrame(lastMoveTimeRef.current);
+      lastMoveTimeRef.current = requestAnimationFrame(() => {
+        setDrawCurrent({ x: mousePos.x, y: mousePos.y + dy });
+        lastMoveTimeRef.current = 0;
+      });
     }
-    lastMoveTimeRef.current = now;
-    
-    setDrawCurrent({ x: mousePos.x, y: mousePos.y + dy });
 
     // Check if hovering over a node
     const hoveredDest = destinations.find(dest => {
@@ -513,13 +576,12 @@ export default function NavigationWheel({
 
       // Auto-lock timer - only sets up locking state, does NOT create connection or start animation
       // Connection creation and car animation happen in handlePointerUp when pointer is released
+      // CRITICAL: Do NOT set lockingConnection here - it causes duplicate rendering!
+      // The connection will render from uniqueConnections when created
       const timer = setTimeout(() => {
         // Just mark that this connection should be locked when pointer is released
         // Don't create connection or start animation here - that happens in handlePointerUp
-        if (newHoveredNode && drawStart) {
-          // Set locking connection state for visual feedback
-          setLockingConnection({ from: drawStart.id, to: newHoveredNode });
-        }
+        // Don't set lockingConnection - it will cause duplicate lines!
       }, lockDuration);
 
       setHoverTimer(timer);
@@ -541,6 +603,12 @@ export default function NavigationWheel({
   };
 
   const handlePointerUp = (e: React.PointerEvent) => {
+    // Cancel any pending animation frames to prevent hanging arrows
+    if (lastMoveTimeRef.current) {
+      cancelAnimationFrame(lastMoveTimeRef.current);
+      lastMoveTimeRef.current = 0;
+    }
+
     // Handle drag-and-drop end in edit mode
     if (isEditMode) {
       // If we were dragging and hovering over another node, swap positions
@@ -574,6 +642,7 @@ export default function NavigationWheel({
         setDraggingNodeId(null);
         setDragStartPos(null);
         setDragStartAngle(null);
+        setDragCurrentPos(null);
         // Release pointer capture
         if (containerRef.current) {
           containerRef.current.releasePointerCapture(e.pointerId);
@@ -629,39 +698,82 @@ export default function NavigationWheel({
     setPointerStartPos(null);
     setPointerDownNodeId(null);
 
+    // If not drawing, reset everything
     if (!isDrawing || !drawStart) {
       resetDrawingState();
+      isProcessingConnectionRef.current = false;
       return;
     }
 
     // Check if released on a valid node (manual release before auto-lock)
     if (hoveredNode && hoveredNode !== drawStart.id) {
-      // Cancel any auto-lock timers to prevent duplicate connections
-      if (hoverTimer) {
-        clearTimeout(hoverTimer);
-        setHoverTimer(null);
+      // GUARD: Prevent multiple simultaneous connection creations
+      if (isProcessingConnectionRef.current) {
+        resetDrawingState();
+        return;
       }
-      if (hoverProgressIntervalRef.current) {
-        clearInterval(hoverProgressIntervalRef.current);
-        hoverProgressIntervalRef.current = null;
-      }
+      
+      // Mark that we're processing a connection IMMEDIATELY
+      isProcessingConnectionRef.current = true;
+      
+      // Save values BEFORE any state changes
+      const fromId = drawStart.id;
+      const toId = hoveredNode;
       
       // Check if connection already exists to prevent duplicates
       const alreadyExists = connections.some(
-        c => c.from === drawStart.id && c.to === hoveredNode
+        c => c.from === fromId && c.to === toId
       );
       
-      if (!alreadyExists) {
-        // Create connection
-        onConnectionCreate(drawStart.id, hoveredNode);
+      // Check BOTH in connections AND uniqueConnections to be absolutely sure
+      const existsInConnections = connections.some(
+        c => (c.from === fromId && c.to === toId) || (c.from === toId && c.to === fromId)
+      );
+      const existsInUnique = uniqueConnections.some(
+        c => (c.from === fromId && c.to === toId) || (c.from === toId && c.to === fromId)
+      );
+      
+      if (alreadyExists || existsInConnections || existsInUnique) {
+        // Connection already exists, reset everything immediately
+        resetDrawingState();
+        isProcessingConnectionRef.current = false;
+        pendingConnectionRef.current = null;
+        return;
       }
       
-      // Start car animation - only when pointer is released
-      setCarAnimation({ from: drawStart.id, to: hoveredNode });
+      // Mark that we've created a connection in this session BEFORE creating it
+      connectionCreatedRef.current = true;
       
-      // Set locking connection for visual feedback
-      setLockingConnection({ from: drawStart.id, to: hoveredNode });
+      // CRITICAL: Set pending connection ref FIRST to prevent any rendering overlap
+      pendingConnectionRef.current = { from: fromId, to: toId };
+      
+      // CRITICAL: Clear drawing state IMMEDIATELY and COMPLETELY before creating connection
+      // This prevents overlapping rendering of isDrawing line and lockingConnection
+      setIsDrawing(false);
+      setDrawStart(null);
+      setDrawCurrent(null); // Clear drawCurrent to remove hanging arrows
+      setHoveredNode(null);
+      setLockProgress(0);
+      setHoverStartTime(null);
+      
+      // Cancel any pending animation frames to prevent hanging arrows
+      if (lastMoveTimeRef.current) {
+        cancelAnimationFrame(lastMoveTimeRef.current);
+        lastMoveTimeRef.current = 0;
+      }
+      
+      // Create connection - DO NOT set lockingConnection here!
+      // The connection will appear in uniqueConnections and render automatically
+      // Setting lockingConnection here causes duplicate rendering
+      onConnectionCreate(fromId, toId);
+      
+      // Start car animation
+      setCarAnimation({ from: fromId, to: toId });
 
+      // CRITICAL: Do NOT set lockingConnection here - it causes duplicate rendering!
+      // The connection will render from uniqueConnections immediately
+      // We only need the lock timer for the lock animation
+      
       // Start lock timer
       const startTime = Date.now();
       const lockDuration = 1000; // 1 second to lock
@@ -677,25 +789,24 @@ export default function NavigationWheel({
       }, 16);
 
       const timer = setTimeout(() => {
-        if (!alreadyExists) {
-          // Lock the connection
-          onConnectionLock(drawStart.id, hoveredNode);
-        }
+        // Lock the connection
+        onConnectionLock(fromId, toId);
         
         // Clear car animation after lock
         setCarAnimation(null);
-        
-        // Reset all drawing state - no chained drawing
-        resetDrawingState();
-        setLockingConnection(null);
         setLockProgress(0);
         clearInterval(progressInterval);
+        // Reset processing flag and pending ref after lock completes
+        isProcessingConnectionRef.current = false;
+        pendingConnectionRef.current = null;
       }, lockDuration);
 
       setLockTimer(timer);
     } else {
       // Reset if not released on valid node
       resetDrawingState();
+      isProcessingConnectionRef.current = false;
+      pendingConnectionRef.current = null;
     }
   };
 
@@ -734,10 +845,33 @@ export default function NavigationWheel({
     };
   }, [lockTimer, hoverTimer, longPressTimer]);
   
-  // Clean up drawing state when connections are cleared
+  // Clear lockingConnection IMMEDIATELY when the connection appears in uniqueConnections
+  // This prevents duplicate lines (lockingConnection + actual connection)
+  // CRITICAL: Use uniqueConnections as source of truth
+  useEffect(() => {
+    if (lockingConnection) {
+      const exists = uniqueConnections.some(
+        c => (c.from === lockingConnection.from && c.to === lockingConnection.to) ||
+             (c.from === lockingConnection.to && c.to === lockingConnection.from)
+      );
+      if (exists) {
+        // Connection is now in uniqueConnections, clear the temporary locking connection IMMEDIATELY
+        setLockingConnection(null);
+        setLockProgress(0);
+        // Also ensure isDrawing is false and clear pending ref
+        setIsDrawing(false);
+        setDrawCurrent(null);
+        pendingConnectionRef.current = null;
+      }
+    }
+  }, [uniqueConnections, lockingConnection]);
+
+  // Clean up drawing state COMPLETELY when connections are cleared
+  // CRITICAL: This ensures no hanging lines/arrows remain after reset
+  // This runs whenever connections array becomes empty
   useEffect(() => {
     if (connections.length === 0) {
-      // Clear all timers
+      // Clear all timers FIRST
       if (lockTimer) {
         clearTimeout(lockTimer);
         setLockTimer(null);
@@ -755,10 +889,36 @@ export default function NavigationWheel({
         setLongPressTimer(null);
       }
       
-      // Reset all drawing state and hide car animation
-      setCarAnimation(null);
+      // Cancel any pending animation frames IMMEDIATELY
+      if (lastMoveTimeRef.current) {
+        cancelAnimationFrame(lastMoveTimeRef.current);
+        lastMoveTimeRef.current = 0;
+      }
+      
+      // CRITICAL: Force remove ALL SVG children immediately to prevent ghost lines
+      if (svgRef.current) {
+        const svg = svgRef.current;
+        // Remove all children except the AnimatePresence wrapper
+        // This ensures no ghost lines remain
+        while (svg.firstChild) {
+          svg.removeChild(svg.firstChild);
+        }
+      }
+      
+      // Reset all drawing state COMPLETELY - this removes ALL lines
+      setIsDrawing(false);
+      setDrawStart(null);
+      setDrawCurrent(null);
+      setHoveredNode(null);
+      setLockProgress(0);
+      setHoverStartTime(null);
       setLockingConnection(null);
-      resetDrawingState();
+      setCarAnimation(null);
+      
+      // Clear all refs and flags
+      isProcessingConnectionRef.current = false;
+      connectionCreatedRef.current = false;
+      pendingConnectionRef.current = null;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [connections.length]);
@@ -783,15 +943,11 @@ export default function NavigationWheel({
         ref={svgRef}
         className="absolute inset-0 w-full h-full pointer-events-none" 
         style={{ zIndex: 1 }}
+        key={connections.length} // CRITICAL: Force SVG to remount when connections are cleared
       >
-        <AnimatePresence>
+        <AnimatePresence mode="popLayout">
           {/* All connections (locked and unlocked) - filter out duplicates */}
-          {connections
-            .filter((conn, idx, self) => {
-              // Remove duplicates - keep only first occurrence of each unique from-to pair
-              return self.findIndex(c => c.from === conn.from && c.to === conn.to) === idx;
-            })
-            .map((conn) => {
+          {uniqueConnections.map((conn) => {
               const fromDest = destinations.find(d => d.id === conn.from);
               const toDest = destinations.find(d => d.id === conn.to);
               if (!fromDest || !toDest) return null;
@@ -813,8 +969,13 @@ export default function NavigationWheel({
             );
             })}
 
-          {/* Locking connection */}
-          {lockingConnection && (
+          {/* Locking connection - ONLY show during lock animation, NEVER when connection exists */}
+          {/* CRITICAL: This should ONLY render during the 1-second lock period, then disappear */}
+          {lockingConnection && !isDrawing && !drawCurrent && 
+           !uniqueConnections.some(
+             c => (c.from === lockingConnection.from && c.to === lockingConnection.to) ||
+                  (c.from === lockingConnection.to && c.to === lockingConnection.from)
+           ) && lockProgress > 0 && (
             (() => {
               const fromDest = destinations.find(d => d.id === lockingConnection.from);
               const toDest = destinations.find(d => d.id === lockingConnection.to);
@@ -839,8 +1000,14 @@ export default function NavigationWheel({
             })()
           )}
 
-          {/* Active drawing line - only show if not already locked */}
-          {isDrawing && drawStart && drawCurrent && !lockingConnection && (
+          {/* Active drawing line - only show when actively drawing and NOT locked */}
+          {/* CRITICAL: Only render if isDrawing is true AND lockingConnection is null AND connection doesn't exist AND not pending */}
+          {isDrawing && drawStart && drawCurrent && !lockingConnection && 
+           !pendingConnectionRef.current &&
+           !uniqueConnections.some(
+             c => (c.from === drawStart.id && c.to === hoveredNode) ||
+                  (c.from === hoveredNode && c.to === drawStart.id)
+           ) && (
             <motion.g>
               <motion.line
                 x1={drawStart.x}
@@ -983,27 +1150,35 @@ export default function NavigationWheel({
             const isDisabled = (dest.isEmpty || dest.label === 'Legg til sted') && hasReachedMax;
             const isDeleting = deletingNodeId === dest.id;
 
+            // Check if this node is being dragged
+            const isDragging = isEditMode && draggingNodeId === dest.id;
+            const dragOffset = isDragging && dragCurrentPos && dragStartPos
+              ? { x: dragCurrentPos.x - dragStartPos.x, y: dragCurrentPos.y - dragStartPos.y }
+              : { x: 0, y: 0 };
+            
             return (
               <motion.div
                 key={dest.id}
                 className="absolute left-1/2 top-0"
                 style={{
-                  x: pos.x - 40,
-                  y: pos.y - 40 + 112, // Add offset to match new center position (pt-28 = 112px)
+                  x: pos.x - 40 + dragOffset.x,
+                  y: pos.y - 40 + 112 + dragOffset.y, // Add offset to match new center position (pt-28 = 112px)
+                  zIndex: isDragging ? 1000 : 1, // Bring dragging node to front
                 }}
                 initial={{ scale: 0, opacity: 0 }}
                 animate={{ 
-                  scale: isSwapping ? 1.2 : 1, 
-                  opacity: 1,
+                  scale: isSwapping ? 1.2 : (isDragging ? 1.15 : 1), 
+                  opacity: isDragging ? 0.9 : 1,
                 }}
                 exit={{ 
                   scale: 0,
                   opacity: 0,
                 }}
                 transition={{ 
-                  type: 'spring', 
+                  type: isDragging ? 'tween' : 'spring', 
                   stiffness: 260, 
                   damping: 20,
+                  duration: isDragging ? 0 : undefined,
                   exit: {
                     duration: 0.4,
                     ease: "easeIn"
