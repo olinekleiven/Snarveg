@@ -47,7 +47,7 @@ function ParticleEffect({ x, y, color, trigger }: ParticleEffectProps) {
         const distance = DISTANCE_MIN + Math.random() * DISTANCE_RANGE;
         
         return {
-          id: Date.now() + i,
+        id: Date.now() + i,
           endX: Math.cos(rad) * distance,
           endY: Math.sin(rad) * distance,
           size: SIZE_MIN + Math.random() * SIZE_RANGE,
@@ -87,25 +87,25 @@ function ParticleEffect({ x, y, color, trigger }: ParticleEffectProps) {
     >
       <AnimatePresence>
         {particles.map((particle) => (
-          <motion.div
-            key={particle.id}
+            <motion.div
+              key={particle.id}
             initial={INITIAL_STATE}
-            animate={{
+              animate={{
               x: particle.endX,
               y: particle.endY,
-              scale: 0,
-              opacity: 0,
-            }}
+                scale: 0,
+                opacity: 0,
+              }}
             exit={EXIT_STATE}
             transition={ANIMATION_TRANSITION}
-            className="absolute rounded-full"
-            style={{
-              width: particle.size,
-              height: particle.size,
-              backgroundColor: color,
+              className="absolute rounded-full"
+              style={{
+                width: particle.size,
+                height: particle.size,
+                backgroundColor: color,
               boxShadow: boxShadowStyle,
-            }}
-          />
+              }}
+            />
         ))}
       </AnimatePresence>
     </div>

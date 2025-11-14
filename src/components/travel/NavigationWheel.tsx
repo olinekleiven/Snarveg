@@ -462,10 +462,15 @@ export default function NavigationWheel({
         }
         // Use getNodeScreenPosition to get exact node position with correct offset
         const nodePos = getNodeScreenPosition(dest);
+        // CRITICAL: Apply LINE_Y_CAL offset to node Y for hit detection to match visual center
+        // The visual center where connections attach is at nodePos.y + dy, so hit detection
+        // must use the same Y coordinate to align with the visual node center
+        const dy = lineYCalRef.current;
+        const visualNodeY = nodePos.y + dy;
         
         const dx = mouseX - nodePos.x;
-        const dy = mouseY - nodePos.y;
-        const distance = Math.sqrt(dx * dx + dy * dy);
+        const dyMouse = mouseY - visualNodeY;
+        const distance = Math.sqrt(dx * dx + dyMouse * dyMouse);
         
         return distance < hitRadius; // Larger hit radius for touch devices
       });
@@ -535,9 +540,15 @@ export default function NavigationWheel({
       }
       
       const pos = getNodeScreenPosition(dest);
+      // CRITICAL: Apply LINE_Y_CAL offset to node Y for hit detection to match visual center
+      // The visual center where connections attach is at pos.y + dy, so hit detection
+      // must use the same Y coordinate to align with the visual node center
+      const dy = lineYCalRef.current;
+      const visualNodeY = pos.y + dy;
+      
       const dx = (e.clientX - rect.left) - pos.x;
-      const dy = (e.clientY - rect.top) - pos.y;
-      const distance = Math.sqrt(dx * dx + dy * dy);
+      const dyMouse = (e.clientY - rect.top) - visualNodeY;
+      const distance = Math.sqrt(dx * dx + dyMouse * dyMouse);
       
       return distance < 50; // 50px hit radius
     });
@@ -933,12 +944,6 @@ export default function NavigationWheel({
       onPointerCancel={handleCancel}
       onPointerLeave={handleCancel}
     >
-      {/* Background decoration */}
-      <div className="absolute inset-0 flex items-start justify-center pointer-events-none pt-10">
-        <div className="w-[85vw] max-w-[450px] aspect-square rounded-full border-2 border-dashed border-gray-200 opacity-50" />
-        <div className="absolute w-[65vw] max-w-[320px] aspect-square rounded-full border border-gray-100" style={{ marginTop: 'calc(85vw * 0.1)' }} />
-      </div>
-
       {/* Connection lines SVG */}
       <svg 
         ref={svgRef}
@@ -1008,57 +1013,59 @@ export default function NavigationWheel({
            !uniqueConnections.some(
              c => (c.from === drawStart.id && c.to === hoveredNode) ||
                   (c.from === hoveredNode && c.to === drawStart.id)
-           ) && (
-            <motion.g>
-              <motion.line
-                x1={drawStart.x}
-                y1={drawStart.y}
-                x2={drawCurrent.x}
-                y2={drawCurrent.y}
-                stroke={hoveredNode 
-                  ? destinations.find(d => d.id === hoveredNode)?.color || '#3B82F6' 
-                  : '#94A3B8'
-                }
-                strokeWidth="4"
-                strokeLinecap="round"
-                opacity={0.8}
-                initial={{ pathLength: 0 }}
-                animate={{ pathLength: 1 }}
-              />
-              {/* Arrow at the end - dynamically rotated */}
-              {(() => {
-                // Calculate angle from drawStart to drawCurrent
-                const angle = Math.atan2(drawCurrent.y - drawStart.y, drawCurrent.x - drawStart.x);
-                const ARROW_LENGTH = 10;
-                const ARROW_ANGLE = Math.PI / 6; // 30 degrees
-                
-                // Calculate arrow points
-                const arrowX1 = drawCurrent.x - ARROW_LENGTH * Math.cos(angle - ARROW_ANGLE);
-                const arrowY1 = drawCurrent.y - ARROW_LENGTH * Math.sin(angle - ARROW_ANGLE);
-                const arrowX2 = drawCurrent.x - ARROW_LENGTH * Math.cos(angle + ARROW_ANGLE);
-                const arrowY2 = drawCurrent.y - ARROW_LENGTH * Math.sin(angle + ARROW_ANGLE);
-                
-                const hoveredColor = hoveredNode 
-                  ? destinations.find(d => d.id === hoveredNode)?.color || '#3B82F6' 
-                  : '#94A3B8';
-                
-                return (
-                  <motion.path
-                    d={`M ${drawCurrent.x} ${drawCurrent.y} 
-                        L ${arrowX1} ${arrowY1} 
-                        M ${drawCurrent.x} ${drawCurrent.y} 
-                        L ${arrowX2} ${arrowY2}`}
-                    stroke={hoveredColor}
-                    strokeWidth="3"
-                    strokeLinecap="round"
-                    opacity={0.8}
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 0.8 }}
-                  />
-                );
-              })()}
-            </motion.g>
-          )}
+           ) && (() => {
+            // CRITICAL: Keep start point unchanged (drawStart.y) so line stays connected to node center
+            // Only adjust the end point (drawCurrent) to align arrow tip with mouse cursor
+            // drawCurrent has +dy offset for connection logic, but mouse position doesn't,
+            // so we subtract dy from drawCurrent.y to visually align with cursor
+            const dy = lineYCalRef.current;
+            const visualCurrentY = drawCurrent.y - dy;
+            
+            // Calculate angle from start (with offset) to visual current (aligned with mouse)
+            const angle = Math.atan2(visualCurrentY - drawStart.y, drawCurrent.x - drawStart.x);
+            const ARROW_LENGTH = 10;
+            const ARROW_ANGLE = Math.PI / 6; // 30 degrees
+            
+            // Calculate arrow points using visual current position
+            const arrowX1 = drawCurrent.x - ARROW_LENGTH * Math.cos(angle - ARROW_ANGLE);
+            const arrowY1 = visualCurrentY - ARROW_LENGTH * Math.sin(angle - ARROW_ANGLE);
+            const arrowX2 = drawCurrent.x - ARROW_LENGTH * Math.cos(angle + ARROW_ANGLE);
+            const arrowY2 = visualCurrentY - ARROW_LENGTH * Math.sin(angle + ARROW_ANGLE);
+            
+            const hoveredColor = hoveredNode 
+              ? destinations.find(d => d.id === hoveredNode)?.color || '#3B82F6' 
+              : '#94A3B8';
+            
+            return (
+              <motion.g>
+                <motion.line
+                  x1={drawStart.x}
+                  y1={drawStart.y}
+                  x2={drawCurrent.x}
+                  y2={visualCurrentY}
+                  stroke={hoveredColor}
+                  strokeWidth="4"
+                  strokeLinecap="round"
+                  opacity={0.8}
+                  initial={{ pathLength: 0 }}
+                  animate={{ pathLength: 1 }}
+                />
+                {/* Arrow at the end - dynamically rotated */}
+                <motion.path
+                  d={`M ${drawCurrent.x} ${visualCurrentY} 
+                      L ${arrowX1} ${arrowY1} 
+                      M ${drawCurrent.x} ${visualCurrentY} 
+                      L ${arrowX2} ${arrowY2}`}
+                  stroke={hoveredColor}
+                  strokeWidth="3"
+                  strokeLinecap="round"
+                  opacity={0.8}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 0.8 }}
+                />
+              </motion.g>
+            );
+          })()}
           
           {/* Car animation on route */}
           {carAnimation && (() => {
