@@ -151,11 +151,11 @@ const ANIMATION_VARIANTS = {
   };
 
 const TRANSITION_CONFIG = {
-  x: { type: 'spring' as const, stiffness: 300, damping: 30 },
-  opacity: { duration: 0.2 },
+  x: { type: 'spring' as const, stiffness: 400, damping: 35 }, // Faster spring
+  opacity: { duration: 0.15 }, // Faster fade
 };
 
-const AUTO_ADVANCE_DELAY = 800; // Slightly faster transitions between steps
+const AUTO_ADVANCE_DELAY = 300; // Much faster transitions between steps
 
 // Background animation constants
 const BG_ORB_1_ANIMATE = {
@@ -181,14 +181,14 @@ const BG_ORB_2_TRANSITION = {
 };
 
 const PROGRESS_TRANSITION = {
-  duration: 0.5,
+  duration: 0.3, // Faster progress bar
   ease: 'easeOut' as const,
 };
 
 const SELECTED_BG_TRANSITION = {
   type: 'spring' as const,
-  stiffness: 300,
-  damping: 30,
+  stiffness: 400, // Faster spring animation
+  damping: 35,
 };
 
 export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
@@ -313,7 +313,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
                       }`}
                       initial={{ opacity: 0, y: 20 }}
                       animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: idx * 0.1 }}
+                      transition={{ delay: idx * 0.05, duration: 0.2 }} // Faster, shorter delays
                       whileTap={{ scale: 0.98 }}
                     >
                       {/* Gradient background when selected */}

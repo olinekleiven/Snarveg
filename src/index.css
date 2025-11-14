@@ -15,6 +15,19 @@
 
   body {
     @apply bg-white text-gray-900;
+    /* Prevent text selection on touch devices when interacting with nodes */
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+  }
+  
+  /* Allow text selection in input fields and text areas */
+  input, textarea, [contenteditable] {
+    -webkit-user-select: text;
+    -moz-user-select: text;
+    -ms-user-select: text;
+    user-select: text;
   }
 }
 

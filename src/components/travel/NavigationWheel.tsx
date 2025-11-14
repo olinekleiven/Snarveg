@@ -311,10 +311,13 @@ export default function NavigationWheel({
       setPointerDownNodeId(nodeId);
     }
     
-    // Start long-press timer (700ms) to open edit modal for filled nodes
+    // Start long-press timer - shorter on mobile for better UX
+    const isTouch = e.pointerType === 'touch';
+    const longPressDelay = isTouch ? 500 : 700; // Faster on mobile
+    
     const timer = setTimeout(() => {
       const destination = destinations.find(d => d.id === nodeId);
-      if (destination && onNodeClick) {
+      if (destination && onNodeClick && !isDrawing) {
         // Cancel any ongoing drawing
         setIsDrawing(false);
         setDrawStart(null);
@@ -329,7 +332,7 @@ export default function NavigationWheel({
           navigator.vibrate(50);
         }
       }
-    }, 700);
+    }, longPressDelay);
     
     setLongPressTimer(timer);
     setLongPressNodeId(nodeId);
@@ -697,15 +700,17 @@ export default function NavigationWheel({
       const isTouch = e.pointerType === 'touch';
       const tapThreshold = isTouch ? 15 : 10; // Larger threshold for touch
       
-      if (pointerDownNodeId && pointerStartPos && !draggingNodeId) {
+      if (pointerDownNodeId && pointerStartPos && !draggingNodeId && !isDrawing) {
         const dest = destinations.find(d => d.id === pointerDownNodeId);
-        if (dest && !dest.isCenter && !dest.isEmpty && dest.label !== 'Legg til sted') {
+        if (dest && !dest.isEmpty && dest.label !== 'Legg til sted') {
           const dx = e.clientX - pointerStartPos.x;
           const dy = e.clientY - pointerStartPos.y;
           const distance = Math.sqrt(dx * dx + dy * dy);
           
-          // If moved less than threshold, treat as tap
+          // If moved less than threshold, treat as tap - works for all nodes including centerNode
           if (distance < tapThreshold && onNodeClick) {
+            // Cancel any ongoing drawing
+            resetDrawingState();
             onNodeClick(dest);
             if (navigator.vibrate) {
               navigator.vibrate(50);
@@ -979,11 +984,25 @@ export default function NavigationWheel({
   return (
     <div 
       ref={containerRef} 
-      className="relative w-full h-full flex items-start justify-center overflow-hidden pt-28"
+      className="relative w-full h-full flex items-start justify-center overflow-hidden pt-28 select-none"
+      style={{ 
+        userSelect: 'none',
+        WebkitUserSelect: 'none',
+        MozUserSelect: 'none',
+        msUserSelect: 'none'
+      }}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
       onPointerCancel={handleCancel}
       onPointerLeave={handleCancel}
+      onTouchStart={(e) => {
+        // Prevent text selection on touch devices
+        e.preventDefault();
+      }}
+      onTouchMove={(e) => {
+        // Prevent text selection while moving
+        e.preventDefault();
+      }}
     >
       {/* Connection lines SVG */}
       <svg 
@@ -1152,8 +1171,11 @@ export default function NavigationWheel({
               Math.pow(toPos.x - fromPos.x, 2) + 
               Math.pow(lineToY - lineFromY, 2)
             );
-            const baseDuration = 1.0;
-            const adaptiveDuration = Math.min(baseDuration + (distance / 500) * 0.5, 1.8);
+            
+            // Optimize for mobile: faster animation, shorter duration
+            const isMobile = window.innerWidth < 768 || 'ontouchstart' in window;
+            const baseDuration = isMobile ? 0.6 : 1.0; // Faster on mobile
+            const adaptiveDuration = Math.min(baseDuration + (distance / 500) * 0.3, isMobile ? 1.2 : 1.8);
 
             // Car size - compact and modern
             const carSize = 24;
@@ -1169,14 +1191,14 @@ export default function NavigationWheel({
                   x: fromPos.x,
                   y: lineFromY,
                   rotate: angle,
-                  opacity: 1,
-                  scale: 0.9
+                  opacity: isMobile ? 1 : 1, // Full opacity on mobile for visibility
+                  scale: isMobile ? 1 : 0.9 // Start at full scale on mobile
                 }}
                 animate={{ 
                   x: toPos.x,
                   y: lineToY,
                   rotate: angle,
-                  opacity: 1,
+                  opacity: 1, // Always full opacity
                   scale: 1
                 }}
                 exit={{ 
@@ -1187,8 +1209,8 @@ export default function NavigationWheel({
                   x: { duration: adaptiveDuration, ease: "easeInOut" },
                   y: { duration: adaptiveDuration, ease: "easeInOut" },
                   rotate: { duration: 0.1 },
-                  opacity: { duration: 0.2 },
-                  scale: { duration: 0.2, ease: "easeOut" }
+                  opacity: { duration: isMobile ? 0.1 : 0.2 }, // Faster fade on mobile
+                  scale: { duration: isMobile ? 0.1 : 0.2, ease: "easeOut" }
                 }}
                 onAnimationComplete={() => {
                   // Only remove car after animation fully completes
@@ -1198,19 +1220,21 @@ export default function NavigationWheel({
                 }}
                 style={{
                   transformOrigin: 'center center',
+                  willChange: isMobile ? 'transform, opacity' : 'auto', // Optimize for mobile
                 }}
               >
-                {/* Shake wrapper for subtle vibration */}
+                {/* Shake wrapper - reduced/disabled on mobile for better performance */}
                 <motion.g
-                  animate={{
-                    y: [0, -0.5, 0.3, 0],
+                  animate={isMobile ? {} : {
+                    y: [0, -0.3, 0.2, 0], // Reduced shake on desktop
                   }}
-                  transition={{
-                    duration: 0.35,
+                  transition={isMobile ? {} : {
+                    duration: 0.4,
                     repeat: Infinity,
                     repeatType: "reverse",
                     ease: "easeInOut"
                   }}
+                  style={isMobile ? { willChange: 'transform' } : {}}
                 >
                   {/* Top-down car - uses color from fromNode (black for center node), front points in driving direction */}
                   <foreignObject
@@ -1218,6 +1242,7 @@ export default function NavigationWheel({
                     y={-(carSize * 2.2) / 2}
                     width={carSize}
                     height={carSize * 2.2}
+                    style={{ willChange: 'transform' }}
                   >
                     <TopDownCar size={carSize} color={carColor} />
                   </foreignObject>
@@ -1229,7 +1254,21 @@ export default function NavigationWheel({
       </svg>
 
       {/* Navigation wheel */}
-      <div ref={wheelContainerRef} className="relative pt-28" style={{ zIndex: 10 }}>
+      <div 
+        ref={wheelContainerRef} 
+        className="relative pt-28 select-none" 
+        style={{ 
+          zIndex: 10,
+          userSelect: 'none',
+          WebkitUserSelect: 'none',
+          MozUserSelect: 'none',
+          msUserSelect: 'none'
+        }}
+        onTouchStart={(e) => {
+          // Prevent text selection on touch devices
+          e.preventDefault();
+        }}
+      >
         {/* Center node */}
         {centerNode && (
           <div 

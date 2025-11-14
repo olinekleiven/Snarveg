@@ -173,7 +173,16 @@ function DestinationNode({
       onPointerUp={handlePointerUp}
       onPointerCancel={handlePointerCancel}
       onContextMenu={onContextMenu}
-      className="relative cursor-pointer touch-none w-20 h-20"
+      onTouchStart={(e) => {
+        // Prevent text selection on touch devices
+        e.preventDefault();
+      }}
+      onTouchMove={(e) => {
+        // Prevent text selection while moving
+        e.preventDefault();
+      }}
+      className="relative cursor-pointer touch-none w-20 h-20 select-none"
+      style={{ userSelect: 'none', WebkitUserSelect: 'none', MozUserSelect: 'none', msUserSelect: 'none' }}
       whileTap={{ scale: 0.95 }}
       animate={animateProps}
       transition={transitionProps}
