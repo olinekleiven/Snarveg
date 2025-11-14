@@ -568,7 +568,7 @@ export default function NavigationWheel({
       // Start new hover timer
       const startTime = Date.now();
       setHoverStartTime(startTime);
-      const lockDuration = 1000; // 1 second to auto-lock
+      const lockDuration = 250; // 250ms to auto-lock - very fast response for better UX
 
       // Progress animation
       const progressInterval = setInterval(() => {
@@ -788,7 +788,7 @@ export default function NavigationWheel({
       
       // Start lock timer
       const startTime = Date.now();
-      const lockDuration = 1000; // 1 second to lock
+      const lockDuration = 250; // 250ms to lock - very fast response for better UX
 
       const progressInterval = setInterval(() => {
         const elapsed = Date.now() - startTime;
@@ -1038,36 +1038,53 @@ export default function NavigationWheel({
             
             return (
               <motion.g>
+                {/* Main line - immediately visible, no animation delay */}
                 <motion.line
                   x1={drawStart.x}
                   y1={drawStart.y}
                   x2={drawCurrent.x}
                   y2={visualCurrentY}
                   stroke={hoveredColor}
-                  strokeWidth="4"
+                  strokeWidth="6"
                   strokeLinecap="round"
-                  opacity={0.8}
-                  initial={{ pathLength: 0 }}
-                  animate={{ pathLength: 1 }}
+                  opacity={1}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ duration: 0.05 }}
                 />
-                {/* Arrow at the end - dynamically rotated */}
+                {/* Subtle glow for better visibility */}
+                <motion.line
+                  x1={drawStart.x}
+                  y1={drawStart.y}
+                  x2={drawCurrent.x}
+                  y2={visualCurrentY}
+                  stroke={hoveredColor}
+                  strokeWidth="14"
+                  strokeLinecap="round"
+                  opacity={0.2}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 0.2 }}
+                  transition={{ duration: 0.05 }}
+                />
+                {/* Arrow at the end - dynamically rotated, immediately visible */}
                 <motion.path
                   d={`M ${drawCurrent.x} ${visualCurrentY} 
                       L ${arrowX1} ${arrowY1} 
                       M ${drawCurrent.x} ${visualCurrentY} 
                       L ${arrowX2} ${arrowY2}`}
                   stroke={hoveredColor}
-                  strokeWidth="3"
+                  strokeWidth="4"
                   strokeLinecap="round"
-                  opacity={0.8}
+                  opacity={1}
                   initial={{ opacity: 0 }}
-                  animate={{ opacity: 0.8 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ duration: 0.05 }}
                 />
               </motion.g>
             );
           })()}
           
-          {/* Car animation on route */}
+          {/* Car animation on route - wheels positioned on the line (road) */}
           {carAnimation && (() => {
             const fromDest = destinations.find(d => d.id === carAnimation.from);
             const toDest = destinations.find(d => d.id === carAnimation.to);
@@ -1076,8 +1093,20 @@ export default function NavigationWheel({
             const fromPos = getNodeScreenPosition(fromDest);
             const toPos = getNodeScreenPosition(toDest);
             
-            // Calculate angle for car rotation
-            const angle = Math.atan2(toPos.y - fromPos.y, toPos.x - fromPos.x) * (180 / Math.PI);
+            // Apply same Y-calibration offset as lines so wheels are ON the line
+            const dy = lineYCalRef.current;
+            const lineFromY = fromPos.y + dy;
+            const lineToY = toPos.y + dy;
+            
+            // Offset car Y position so wheels (bottom of emoji) are on the line
+            // Emoji is 24px font size, so center is at y, but wheels are at bottom
+            // Adjust by ~8-10px down so wheels sit on the line
+            const wheelOffset = 10; // Offset to position wheels on line
+            const fromY = lineFromY + wheelOffset;
+            const toY = lineToY + wheelOffset;
+            
+            // Calculate angle for car rotation using line positions
+            const angle = Math.atan2(lineToY - lineFromY, toPos.x - fromPos.x) * (180 / Math.PI);
 
             return (
               <motion.g
@@ -1085,16 +1114,16 @@ export default function NavigationWheel({
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
               >
-                {/* Car icon */}
+                {/* Car icon - wheels positioned on the line (road) */}
                 <motion.text
                   fontSize="24"
                   initial={{ 
                     x: fromPos.x,
-                    y: fromPos.y,
+                    y: fromY,
                   }}
                   animate={{ 
                     x: toPos.x,
-                    y: toPos.y,
+                    y: toY,
                   }}
                   transition={{ 
                     duration: 1,
@@ -1280,7 +1309,7 @@ export default function NavigationWheel({
             exit={{ opacity: 0 }}
             className="absolute top-8 left-1/2 -translate-x-1/2 text-center"
           >
-            <p className="text-green-600 font-medium text-sm">✓ Legg til flere, eller trykk «Vis reiseplan»</p>
+            <p className="text-green-600 font-medium text-sm">✓ Legg til fler, eller vis reiseplan</p>
           </motion.div>
         )}
 
