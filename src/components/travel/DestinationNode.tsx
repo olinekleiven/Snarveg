@@ -154,6 +154,7 @@ function DestinationNode({
   }, [onDeleteClick]);
 
   // Memoize animate object
+  // Use isHovered for scale (1.15) - this works for all nodes including centerNode
   const animateProps = useMemo(() => ({
     scale: isDeleting ? 0.85 : (isHovered ? 1.15 : 1),
     opacity: isDeleting ? 0.5 : 1,
@@ -173,7 +174,6 @@ function DestinationNode({
       onPointerCancel={handlePointerCancel}
       onContextMenu={onContextMenu}
       className="relative cursor-pointer touch-none w-20 h-20"
-      whileHover={{ scale: isCenter ? 1 : 1.1 }}
       whileTap={{ scale: 0.95 }}
       animate={animateProps}
       transition={transitionProps}

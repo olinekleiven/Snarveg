@@ -441,6 +441,40 @@ export default function NavigationWheel({
   }, [destinations, onNodeClick]);
 
   const handlePointerMove = (e: React.PointerEvent) => {
+    // Check for hover on nodes even when not drawing (for visual feedback)
+    // This allows centerNode and other nodes to show hover effect when not drawing
+    if (!isDrawing && !isEditMode && containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect();
+      
+      // Check if hovering over any node (including center node)
+      const hoveredDest = destinations.find(dest => {
+        // Don't allow hovering over empty nodes
+        if (dest.isEmpty || !dest.label || dest.label.trim() === '' || dest.label === 'Legg til sted') {
+          return false;
+        }
+        
+        const pos = getNodeScreenPosition(dest);
+        const dy = lineYCalRef.current;
+        const visualNodeY = pos.y + dy;
+        
+        const dx = (e.clientX - rect.left) - pos.x;
+        const dyMouse = (e.clientY - rect.top) - visualNodeY;
+        const distance = Math.sqrt(dx * dx + dyMouse * dyMouse);
+        
+        return distance < 50; // 50px hit radius
+      });
+      
+      const newHoveredNode = hoveredDest?.id || null;
+      if (newHoveredNode !== hoveredNode) {
+        setHoveredNode(newHoveredNode);
+      }
+      
+      // Clear hover if mouse moves away from all nodes
+      if (!hoveredDest && hoveredNode) {
+        setHoveredNode(null);
+      }
+    }
+    
     // Handle drag-and-drop in edit mode - allow visual dragging and swapping
     if (isEditMode && draggingNodeId && dragStartPos && dragStartAngle !== null && containerRef.current) {
       // Use same rect as getNodeScreenPosition() for coordinate system consistency
@@ -849,6 +883,9 @@ export default function NavigationWheel({
     setLockingConnection(null);
     setCarAnimation(null);
     resetDrawingState();
+    
+    // Clear hover when leaving container
+    setHoveredNode(null);
   };
 
   // Clean up timers on unmount
