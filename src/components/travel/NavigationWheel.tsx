@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Edit, Check } from 'lucide-react';
 import DestinationNode from './DestinationNode';
 import DrawingLine from './DrawingLine';
+import { TopDownCar } from './TopDownCar';
 import { Destination, Connection } from './types';
 import { toast } from 'sonner';
 
@@ -185,8 +186,8 @@ export default function NavigationWheel({
     
     // For other nodes: calculate position based on angle and radius
     // Use computed angle when available so nodes are evenly spaced
-    const angle = computedAngles.get(dest.id) ?? dest.position.angle;
-    const pos = getNodePosition(angle, dest.position.radius);
+  const angle = computedAngles.get(dest.id) ?? dest.position.angle;
+  const pos = getNodePosition(angle, dest.position.radius);
     
     return {
       x: centerX + pos.x,
@@ -246,16 +247,16 @@ export default function NavigationWheel({
         // This prevents accidental drags when user just wants to tap
         const isTouch = e.pointerType === 'touch';
         const startDrag = () => {
-          const angle = computedAngles.get(nodeId) ?? dest.position.angle;
+        const angle = computedAngles.get(nodeId) ?? dest.position.angle;
           const startPos = { x: e.clientX - rect.left, y: e.clientY - rect.top };
-          setDraggingNodeId(nodeId);
+        setDraggingNodeId(nodeId);
           setDragStartPos(startPos);
           setDragCurrentPos(startPos); // Initialize current pos to start pos
-          setDragStartAngle(angle);
-          
-          // Set pointer capture on the container for smooth dragging
-          if (containerRef.current) {
-            containerRef.current.setPointerCapture(e.pointerId);
+        setDragStartAngle(angle);
+        
+        // Set pointer capture on the container for smooth dragging
+        if (containerRef.current) {
+          containerRef.current.setPointerCapture(e.pointerId);
           }
           
           // Provide haptic feedback when drag starts on touch
@@ -403,8 +404,8 @@ export default function NavigationWheel({
     const destination = destinations.find(d => d.id === nodeId);
 
     if (!destination) {
-      return {
-        allowed: false,
+        return {
+          allowed: false,
         message: 'Fann ikkje denne noden',
       };
     }
@@ -416,7 +417,7 @@ export default function NavigationWheel({
         message: 'Du kan ikkje starte frå ein tom node. Vel eit stad først!',
       };
     }
-
+    
     // Prevent multiple outgoing connections from the same node
     const hasOutgoingConnection = connections.some(c => c.from === nodeId);
     if (hasOutgoingConnection) {
@@ -425,7 +426,7 @@ export default function NavigationWheel({
         message: 'Denne noden har allereie ein forbindelse vidare',
       };
     }
-
+    
     return { allowed: true };
   }, [destinations, connections]);
 
@@ -785,7 +786,7 @@ export default function NavigationWheel({
       // CRITICAL: Do NOT set lockingConnection here - it causes duplicate rendering!
       // The connection will render from uniqueConnections immediately
       // We only need the lock timer for the lock animation
-      
+
       // Start lock timer
       const startTime = Date.now();
       const lockDuration = 250; // 250ms to lock - very fast response for better UX
@@ -804,8 +805,11 @@ export default function NavigationWheel({
         // Lock the connection
         onConnectionLock(fromId, toId);
         
-        // Clear car animation after lock
-        setCarAnimation(null);
+        // Start car animation after lock (quick delay for smooth transition)
+        setTimeout(() => {
+          setCarAnimation({ from: fromId, to: toId });
+        }, 200);
+        
         setLockProgress(0);
         clearInterval(progressInterval);
         // Reset processing flag and pending ref after lock completes
@@ -954,12 +958,12 @@ export default function NavigationWheel({
         <AnimatePresence mode="popLayout">
           {/* All connections (locked and unlocked) - filter out duplicates */}
           {uniqueConnections.map((conn) => {
-              const fromDest = destinations.find(d => d.id === conn.from);
-              const toDest = destinations.find(d => d.id === conn.to);
-              if (!fromDest || !toDest) return null;
+            const fromDest = destinations.find(d => d.id === conn.from);
+            const toDest = destinations.find(d => d.id === conn.to);
+            if (!fromDest || !toDest) return null;
 
-              const fromPos = getNodeScreenPosition(fromDest);
-              const toPos = getNodeScreenPosition(toDest);
+            const fromPos = getNodeScreenPosition(fromDest);
+            const toPos = getNodeScreenPosition(toDest);
               
             // Apply Y-calibration offset to line endpoints (use cached value)
             const dy = lineYCalRef.current;
@@ -973,7 +977,7 @@ export default function NavigationWheel({
                 isLocked={conn.isLocked}
               />
             );
-            })}
+          })}
 
           {/* Locking connection - ONLY show during lock animation, NEVER when connection exists */}
           {/* CRITICAL: This should ONLY render during the 1-second lock period, then disappear */}
@@ -1037,16 +1041,16 @@ export default function NavigationWheel({
               : '#94A3B8';
             
             return (
-              <motion.g>
+            <motion.g>
                 {/* Main line - immediately visible, no animation delay */}
-                <motion.line
-                  x1={drawStart.x}
-                  y1={drawStart.y}
-                  x2={drawCurrent.x}
+              <motion.line
+                x1={drawStart.x}
+                y1={drawStart.y}
+                x2={drawCurrent.x}
                   y2={visualCurrentY}
                   stroke={hoveredColor}
                   strokeWidth="6"
-                  strokeLinecap="round"
+                strokeLinecap="round"
                   opacity={1}
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
@@ -1067,24 +1071,24 @@ export default function NavigationWheel({
                   transition={{ duration: 0.05 }}
                 />
                 {/* Arrow at the end - dynamically rotated, immediately visible */}
-                <motion.path
+                  <motion.path
                   d={`M ${drawCurrent.x} ${visualCurrentY} 
-                      L ${arrowX1} ${arrowY1} 
+                        L ${arrowX1} ${arrowY1} 
                       M ${drawCurrent.x} ${visualCurrentY} 
-                      L ${arrowX2} ${arrowY2}`}
+                        L ${arrowX2} ${arrowY2}`}
                   stroke={hoveredColor}
                   strokeWidth="4"
-                  strokeLinecap="round"
+                    strokeLinecap="round"
                   opacity={1}
-                  initial={{ opacity: 0 }}
+                    initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   transition={{ duration: 0.05 }}
-                />
+                  />
               </motion.g>
-            );
-          })()}
+                );
+              })()}
           
-          {/* Car animation on route - wheels positioned on the line (road) */}
+          {/* Car animation on route - modern top-down car with node color */}
           {carAnimation && (() => {
             const fromDest = destinations.find(d => d.id === carAnimation.from);
             const toDest = destinations.find(d => d.id === carAnimation.to);
@@ -1093,49 +1097,94 @@ export default function NavigationWheel({
             const fromPos = getNodeScreenPosition(fromDest);
             const toPos = getNodeScreenPosition(toDest);
             
-            // Apply same Y-calibration offset as lines so wheels are ON the line
-            const dy = lineYCalRef.current;
-            const lineFromY = fromPos.y + dy;
-            const lineToY = toPos.y + dy;
+            // Use same Y-calibration offset as lines so car is centered on the road
+            const lineYOffset = lineYCalRef.current;
+            const lineFromY = fromPos.y + lineYOffset;
+            const lineToY = toPos.y + lineYOffset;
             
-            // Offset car Y position so wheels (bottom of emoji) are on the line
-            // Emoji is 24px font size, so center is at y, but wheels are at bottom
-            // Adjust by ~8-10px down so wheels sit on the line
-            const wheelOffset = 10; // Offset to position wheels on line
-            const fromY = lineFromY + wheelOffset;
-            const toY = lineToY + wheelOffset;
+            // Calculate angle for car rotation - fronten skal peke i kjøreretningen
+            // Math.atan2 gir vinkel hvor 0° = høyre, 90° = ned, -90° = opp
+            // Bilen er tegnet med fronten øverst (peker opp = -90° i SVG), så vi må justere
+            // For å få fronten til å peke i kjøreretningen: angle = atan2(deltaY, deltaX) + 90°
+            const deltaX = toPos.x - fromPos.x;
+            const deltaY = lineToY - lineFromY;
+            const angle = Math.atan2(deltaY, deltaX) * (180 / Math.PI) + 90;
             
-            // Calculate angle for car rotation using line positions
-            const angle = Math.atan2(lineToY - lineFromY, toPos.x - fromPos.x) * (180 / Math.PI);
+            // Calculate distance for adaptive animation duration
+            const distance = Math.sqrt(
+              Math.pow(toPos.x - fromPos.x, 2) + 
+              Math.pow(lineToY - lineFromY, 2)
+            );
+            const baseDuration = 1.0;
+            const adaptiveDuration = Math.min(baseDuration + (distance / 500) * 0.5, 1.8);
+
+            // Car size - compact and modern
+            const carSize = 24;
+            
+            // Use car color from fromNode - if it's center node, use black/dark gray
+            // Center node has gradient background but should have black car
+            const carColor = fromDest.isCenter ? '#1F2937' : fromDest.color;
 
             return (
               <motion.g
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
+                key={`car-${carAnimation.from}-${carAnimation.to}`}
+                initial={{ 
+                  x: fromPos.x,
+                  y: lineFromY,
+                  rotate: angle,
+                  opacity: 1,
+                  scale: 0.9
+                }}
+                animate={{ 
+                  x: toPos.x,
+                  y: lineToY,
+                  rotate: angle,
+                  opacity: 1,
+                  scale: 1
+                }}
+                exit={{ 
+                  opacity: 0,
+                  scale: 0.8
+                }}
+                transition={{ 
+                  x: { duration: adaptiveDuration, ease: "easeInOut" },
+                  y: { duration: adaptiveDuration, ease: "easeInOut" },
+                  rotate: { duration: 0.1 },
+                  opacity: { duration: 0.2 },
+                  scale: { duration: 0.2, ease: "easeOut" }
+                }}
+                onAnimationComplete={() => {
+                  // Only remove car after animation fully completes
+                  setTimeout(() => {
+                    setCarAnimation(null);
+                  }, 200);
+                }}
+                style={{
+                  transformOrigin: 'center center',
+                }}
               >
-                {/* Car icon - wheels positioned on the line (road) */}
-                <motion.text
-                  fontSize="24"
-                  initial={{ 
-                    x: fromPos.x,
-                    y: fromY,
+                {/* Shake wrapper for subtle vibration */}
+                <motion.g
+                  animate={{
+                    y: [0, -0.5, 0.3, 0],
                   }}
-                  animate={{ 
-                    x: toPos.x,
-                    y: toY,
-                  }}
-                  transition={{ 
-                    duration: 1,
+                  transition={{
+                    duration: 0.35,
+                    repeat: Infinity,
+                    repeatType: "reverse",
                     ease: "easeInOut"
                   }}
-                  style={{
-                    transform: `rotate(${angle}deg)`,
-                    transformOrigin: 'center',
-                  }}
                 >
-                  🚗
-                </motion.text>
+                  {/* Top-down car - uses color from fromNode (black for center node), front points in driving direction */}
+                  <foreignObject
+                    x={-carSize / 2}
+                    y={-(carSize * 2.2) / 2}
+                    width={carSize}
+                    height={carSize * 2.2}
+                  >
+                    <TopDownCar size={carSize} color={carColor} />
+                  </foreignObject>
+                </motion.g>
               </motion.g>
             );
           })()}
@@ -1192,7 +1241,7 @@ export default function NavigationWheel({
             const dragOffset = isDragging && dragCurrentPos && dragStartPos
               ? { x: dragCurrentPos.x - dragStartPos.x, y: dragCurrentPos.y - dragStartPos.y }
               : { x: 0, y: 0 };
-            
+
             return (
               <motion.div
                 key={dest.id}
@@ -1302,16 +1351,16 @@ export default function NavigationWheel({
 
 
       {/* Progress hint - shows after first connection - moved to top */}
-        {connections.length > 0 && connections.length < 4 && !isDrawing && !lockingConnection && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
+      {connections.length > 0 && connections.length < 4 && !isDrawing && !lockingConnection && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
             className="absolute top-8 left-1/2 -translate-x-1/2 text-center"
-          >
+        >
             <p className="text-green-600 font-medium text-sm">✓ Legg til fler, eller vis reiseplan</p>
-          </motion.div>
-        )}
+        </motion.div>
+      )}
 
       {/* Edit button - bottom left - only show when no route is selected, no line is being drawn, and no line is active/recently drawn */}
       <AnimatePresence>
@@ -1320,8 +1369,8 @@ export default function NavigationWheel({
          !lockingConnection && 
          connections.length === 0 && 
          !carAnimation && (
-          <EditButton isEditMode={isEditMode} onToggle={onEditModeToggle} />
-        )}
+        <EditButton isEditMode={isEditMode} onToggle={onEditModeToggle} />
+      )}
       </AnimatePresence>
     </div>
   );
