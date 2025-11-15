@@ -64,3 +64,24 @@
     @apply text-base font-normal leading-6;
   }
 }
+
+/* Mobile-specific adjustment for navigation wheel positioning */
+/* Only affects Chrome DevTools Device Mode, NOT real iPhone devices */
+/* Chrome DevTools typically has different viewport characteristics */
+@media (max-width: 430px) and (orientation: portrait) {
+  /* Only apply when NOT on a real iOS device */
+  /* Real iOS devices have -webkit-touch-callout support */
+  @supports not (-webkit-touch-callout: none) {
+    /* Target the wheel container inside NavigationWheel component */
+    /* This selector matches the wheelContainerRef div with classes: relative pt-28 select-none */
+    div.relative.pt-28.select-none[style*="zIndex"] {
+      margin-top: 5rem; /* 80px - moves wheel down significantly for better centering in Chrome DevTools */
+    }
+    
+    /* Alternative: Target via parent container structure */
+    /* Ensures we only affect the navigation wheel, not other elements */
+    .relative.w-full.h-full.flex.items-start > div.relative.pt-28.select-none {
+      margin-top: 5rem; /* 80px - increased for better positioning */
+    }
+  }
+} 

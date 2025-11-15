@@ -269,18 +269,18 @@ export default function SettingsModal({ isOpen, onClose, currentPreferences, onS
           </div>
 
           {/* Footer with action buttons */}
-          <div className="sticky bottom-0 bg-white border-t border-gray-100 p-6 space-y-3">
-            <div className="flex gap-3">
+          <div className="sticky bottom-0 bg-white border-t border-gray-100 p-6">
+            <div className="flex gap-3 justify-center">
               <motion.button
                 onClick={handleCancel}
-                className="flex-1 py-3 bg-gray-100 text-gray-700 rounded-xl text-center"
+                className="w-auto px-8 py-3 bg-gray-100 text-gray-700 rounded-xl text-center"
                 whileTap={{ scale: 0.98 }}
               >
                 Avbryt
               </motion.button>
               <motion.button
                 onClick={handleSave}
-                className={`flex-1 py-3 rounded-xl flex items-center justify-center gap-2 ${
+                className={`w-auto px-8 py-3 rounded-xl flex items-center justify-center gap-2 ${
                   hasChanges
                     ? 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg'
                     : 'bg-gray-200 text-gray-400'
@@ -289,22 +289,9 @@ export default function SettingsModal({ isOpen, onClose, currentPreferences, onS
                 disabled={!hasChanges}
               >
                 <Save className="w-4 h-4" />
-                Lagre endringer
+                Lagre
               </motion.button>
             </div>
-            
-            {/* Reset onboarding button */}
-            <motion.button
-              onClick={() => {
-                localStorage.removeItem('snarveg_onboarding_complete');
-                localStorage.removeItem('snarveg_preferences');
-                window.location.reload();
-              }}
-              className="w-full py-2 text-sm text-gray-500 hover:text-gray-700 transition-colors"
-              whileTap={{ scale: 0.98 }}
-            >
-              Se onboarding igjen
-            </motion.button>
           </div>
         </motion.div>
       </motion.div>

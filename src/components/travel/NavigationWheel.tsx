@@ -3,7 +3,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Edit, Check } from 'lucide-react';
 import DestinationNode from './DestinationNode';
 import DrawingLine from './DrawingLine';
-import { TopDownCar } from './TopDownCar';
 import { Destination, Connection } from './types';
 import { toast } from 'sonner';
 
@@ -818,9 +817,6 @@ export default function NavigationWheel({
       // The connection will appear in uniqueConnections and render automatically
       // Setting lockingConnection here causes duplicate rendering
       onConnectionCreate(fromId, toId);
-      
-      // Start car animation
-      setCarAnimation({ from: fromId, to: toId });
 
       // CRITICAL: Do NOT set lockingConnection here - it causes duplicate rendering!
       // The connection will render from uniqueConnections immediately
@@ -829,6 +825,11 @@ export default function NavigationWheel({
       // Start lock timer
       const startTime = Date.now();
       const lockDuration = 250; // 250ms to lock - very fast response for better UX
+
+      // Start car animation early - while lock animation is in progress
+      setTimeout(() => {
+        setCarAnimation({ from: fromId, to: toId });
+      }, 100); // Start car 100ms after connection is created (before lock completes)
 
       const progressInterval = setInterval(() => {
         const elapsed = Date.now() - startTime;
@@ -843,11 +844,6 @@ export default function NavigationWheel({
       const timer = setTimeout(() => {
         // Lock the connection
         onConnectionLock(fromId, toId);
-        
-        // Start car animation after lock (quick delay for smooth transition)
-        setTimeout(() => {
-          setCarAnimation({ from: fromId, to: toId });
-        }, 200);
         
         setLockProgress(0);
         clearInterval(progressInterval);
@@ -1008,7 +1004,7 @@ export default function NavigationWheel({
       <svg 
         ref={svgRef}
         className="absolute inset-0 w-full h-full pointer-events-none" 
-        style={{ zIndex: 1 }}
+        style={{ zIndex: 1, overflow: 'visible' }}
         key={connections.length} // CRITICAL: Force SVG to remount when connections are cleared
       >
         <AnimatePresence mode="popLayout">
@@ -1148,10 +1144,19 @@ export default function NavigationWheel({
           {carAnimation && (() => {
             const fromDest = destinations.find(d => d.id === carAnimation.from);
             const toDest = destinations.find(d => d.id === carAnimation.to);
-            if (!fromDest || !toDest) return null;
+            if (!fromDest || !toDest) {
+              console.warn('Car animation: destination not found', carAnimation);
+              return null;
+            }
 
             const fromPos = getNodeScreenPosition(fromDest);
             const toPos = getNodeScreenPosition(toDest);
+            
+            // Validate positions
+            if (!fromPos || !toPos || isNaN(fromPos.x) || isNaN(fromPos.y) || isNaN(toPos.x) || isNaN(toPos.y)) {
+              console.warn('Car animation: invalid positions', { fromPos, toPos });
+              return null;
+            }
             
             // Use same Y-calibration offset as lines so car is centered on the road
             const lineYOffset = lineYCalRef.current;
@@ -1172,81 +1177,114 @@ export default function NavigationWheel({
               Math.pow(lineToY - lineFromY, 2)
             );
             
-            // Optimize for mobile: faster animation, shorter duration
+            // Calculate smooth animation duration based on distance
             const isMobile = window.innerWidth < 768 || 'ontouchstart' in window;
-            const baseDuration = isMobile ? 0.6 : 1.0; // Faster on mobile
-            const adaptiveDuration = Math.min(baseDuration + (distance / 500) * 0.3, isMobile ? 1.2 : 1.8);
+            const minDuration = isMobile ? 1.2 : 1.5;
+            const maxDuration = isMobile ? 2.0 : 2.5;
+            const duration = Math.max(minDuration, Math.min(minDuration + (distance / 500) * 0.6, maxDuration));
 
-            // Car size - compact and modern
             const carSize = 24;
-            
-            // Use car color from fromNode - if it's center node, use black/dark gray
-            // Center node has gradient background but should have black car
             const carColor = fromDest.isCenter ? '#1F2937' : fromDest.color;
+
+            // Smooth easing curve for fluid motion
+            const smoothEase = [0.4, 0, 0.2, 1];
 
             return (
               <motion.g
                 key={`car-${carAnimation.from}-${carAnimation.to}`}
-                initial={{ 
-                  x: fromPos.x,
+                  initial={{ 
+                    x: fromPos.x,
                   y: lineFromY,
                   rotate: angle,
-                  opacity: isMobile ? 1 : 1, // Full opacity on mobile for visibility
-                  scale: isMobile ? 1 : 0.9 // Start at full scale on mobile
-                }}
-                animate={{ 
-                  x: toPos.x,
+                  opacity: 1,
+                  scale: 1
+                  }}
+                  animate={{ 
+                    x: toPos.x,
                   y: lineToY,
                   rotate: angle,
-                  opacity: 1, // Always full opacity
+                  opacity: 1,
                   scale: 1
                 }}
                 exit={{ 
                   opacity: 0,
                   scale: 0.8
-                }}
-                transition={{ 
-                  x: { duration: adaptiveDuration, ease: "easeInOut" },
-                  y: { duration: adaptiveDuration, ease: "easeInOut" },
-                  rotate: { duration: 0.1 },
-                  opacity: { duration: isMobile ? 0.1 : 0.2 }, // Faster fade on mobile
-                  scale: { duration: isMobile ? 0.1 : 0.2, ease: "easeOut" }
+                  }}
+                  transition={{ 
+                  x: { duration, ease: smoothEase, type: "tween" },
+                  y: { duration, ease: smoothEase, type: "tween" },
+                  rotate: { duration, ease: smoothEase, type: "tween" },
+                  opacity: { duration: 0.1 },
+                  scale: { duration: 0.1 }
                 }}
                 onAnimationComplete={() => {
-                  // Only remove car after animation fully completes
-                  setTimeout(() => {
-                    setCarAnimation(null);
-                  }, 200);
-                }}
-                style={{
+                  setTimeout(() => setCarAnimation(null), 200);
+                  }}
+                  style={{
                   transformOrigin: 'center center',
-                  willChange: isMobile ? 'transform, opacity' : 'auto', // Optimize for mobile
+                  willChange: 'transform',
+                  pointerEvents: 'none',
                 }}
               >
-                {/* Shake wrapper - reduced/disabled on mobile for better performance */}
-                <motion.g
-                  animate={isMobile ? {} : {
-                    y: [0, -0.3, 0.2, 0], // Reduced shake on desktop
+                {/* Render car directly as SVG elements for better mobile compatibility */}
+                <g 
+                  transform={`translate(${-carSize / 2}, ${-(carSize * 2.2) / 2})`}
+                  style={{ 
+                    transformOrigin: 'center center',
+                    willChange: 'transform',
                   }}
-                  transition={isMobile ? {} : {
-                    duration: 0.4,
-                    repeat: Infinity,
-                    repeatType: "reverse",
-                    ease: "easeInOut"
-                  }}
-                  style={isMobile ? { willChange: 'transform' } : {}}
                 >
-                  {/* Top-down car - uses color from fromNode (black for center node), front points in driving direction */}
-                  <foreignObject
-                    x={-carSize / 2}
-                    y={-(carSize * 2.2) / 2}
-                    width={carSize}
-                    height={carSize * 2.2}
-                    style={{ willChange: 'transform' }}
-                  >
-                    <TopDownCar size={carSize} color={carColor} />
-                  </foreignObject>
-                </motion.g>
+                  {/* Car body - inline SVG for mobile compatibility */}
+                  <g transform={`scale(${carSize / 80})`}>
+                    {/* Car body - rounded rectangular shape */}
+                    <rect
+                      x="12"
+                      y="8"
+                      width="56"
+                      height="160"
+                      rx="22"
+                      ry="22"
+                      fill={carColor}
+                      stroke="#111"
+                      strokeWidth="2.5"
+                    />
+                    {/* Front bumper highlight */}
+                    <rect
+                      x="18"
+                      y="8"
+                      width="44"
+                      height="14"
+                      rx="6"
+                      fill={carColor}
+                      opacity="0.85"
+                    />
+                    {/* Windshield */}
+                    <path
+                      d="M 20 22 L 28 38 L 52 38 L 60 22 Z"
+                      fill="#0D0F11"
+                      stroke="#111827"
+                      strokeWidth="1"
+                    />
+                    {/* Front headlights - white */}
+                    <ellipse cx="24" cy="18" rx="3" ry="2" fill="#FFFFFF" opacity="0.9" />
+                    <ellipse cx="56" cy="18" rx="3" ry="2" fill="#FFFFFF" opacity="0.9" />
+                    {/* Side windows - left */}
+                    <rect x="18" y="48" width="12" height="32" rx="4" fill="#0D0F11" stroke="#111827" strokeWidth="1" />
+                    <rect x="18" y="88" width="12" height="32" rx="4" fill="#0D0F11" stroke="#111827" strokeWidth="1" />
+                    {/* Side windows - right */}
+                    <rect x="50" y="48" width="12" height="32" rx="4" fill="#0D0F11" stroke="#111827" strokeWidth="1" />
+                    <rect x="50" y="88" width="12" height="32" rx="4" fill="#0D0F11" stroke="#111827" strokeWidth="1" />
+                    {/* Roof section */}
+                    <rect x="30" y="48" width="20" height="72" rx="8" fill={carColor} opacity="0.95" />
+                    {/* Rear window */}
+                    <path d="M 20 138 L 28 154 L 52 154 L 60 138 Z" fill="#0D0F11" stroke="#111827" strokeWidth="1" />
+                    {/* Rear bumper highlight */}
+                    <rect x="18" y="154" width="44" height="14" rx="6" fill={carColor} opacity="0.85" />
+                    {/* Taillights - orange */}
+                    <rect x="16" y="160" width="6" height="8" rx="3" fill="#FF8C00" opacity="0.9" />
+                    <rect x="58" y="160" width="6" height="8" rx="3" fill="#FF8C00" opacity="0.9" />
+                  </g>
+                </g>
               </motion.g>
             );
           })()}

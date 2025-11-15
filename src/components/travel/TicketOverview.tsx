@@ -92,6 +92,7 @@ const ticketOptions: TicketOption[] = [
 ];
 
 export default function TicketOverview({ isOpen, onClose, plannedTravelTime, onPurchaseTicket }: TicketOverviewProps) {
+  const [selectedTicket, setSelectedTicket] = useState<TicketOption | null>(null);
   const [activeTicket, setActiveTicket] = useState<{
     type: string;
     expiresAt: Date;
@@ -129,25 +130,36 @@ export default function TicketOverview({ isOpen, onClose, plannedTravelTime, onP
 
   const recommendedTicket = getRecommendedTicket();
 
-  const handlePurchase = (ticket: TicketOption) => {
-    const expiresAt = new Date(Date.now() + ticket.duration * 60 * 1000);
+  const handleTicketSelect = (ticket: TicketOption) => {
+    setSelectedTicket(ticket);
+  };
+
+  const handleConfirmPurchase = () => {
+    if (!selectedTicket) return;
+    
+    const expiresAt = new Date(Date.now() + selectedTicket.duration * 60 * 1000);
     const newTicket = {
-      type: ticket.name,
+      type: selectedTicket.name,
       expiresAt,
-      price: ticket.price,
+      price: selectedTicket.price,
     };
     
-    setActiveTicket(newTicket);
-    localStorage.setItem('snarveg_active_ticket', JSON.stringify(newTicket));
+    // Close confirmation modal first for smooth transition
+    setSelectedTicket(null);
     
-    if (onPurchaseTicket) {
-      onPurchaseTicket(ticket.id, ticket.duration, ticket.price);
-    }
-    
-    // Close modal after successful purchase
+    // Update active ticket with smooth animation
     setTimeout(() => {
-      onClose();
-    }, 1000);
+      setActiveTicket(newTicket);
+      localStorage.setItem('snarveg_active_ticket', JSON.stringify(newTicket));
+      
+      if (onPurchaseTicket) {
+        onPurchaseTicket(selectedTicket.id, selectedTicket.duration, selectedTicket.price);
+      }
+    }, 300); // Small delay for smooth modal close animation
+  };
+
+  const handleCancelPurchase = () => {
+    setSelectedTicket(null);
   };
 
   const getTimeRemaining = () => {
@@ -280,7 +292,7 @@ export default function TicketOverview({ isOpen, onClose, plannedTravelTime, onP
                   return (
                     <motion.button
                       key={ticket.id}
-                      onClick={() => handlePurchase(ticket)}
+                      onClick={() => handleTicketSelect(ticket)}
                       className={`w-full text-left p-5 rounded-2xl transition-all ${
                         isRecommended
                           ? 'bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-300 shadow-lg'
@@ -338,6 +350,78 @@ export default function TicketOverview({ isOpen, onClose, plannedTravelTime, onP
         </motion.div>
       </motion.div>
         )}
+
+      {/* Purchase Confirmation Modal */}
+      <AnimatePresence>
+        {selectedTicket && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[120] flex items-center justify-center p-4"
+            onClick={handleCancelPurchase}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white rounded-3xl shadow-2xl max-w-md w-full overflow-hidden"
+            >
+              {/* Header */}
+              <div className="bg-gradient-to-br from-blue-500 via-indigo-600 to-purple-600 text-white p-6">
+                <h3 className="text-2xl font-semibold mb-2">Bekreft kjøp</h3>
+                <p className="text-blue-100 text-sm">Gjennomgå billettdetaljer før kjøp</p>
+              </div>
+
+              {/* Ticket Details */}
+              <div className="p-6 space-y-4">
+                <div className="bg-gray-50 rounded-2xl p-5 border border-gray-200">
+                  <div className="flex items-center justify-between mb-3">
+                    <h4 className="text-lg font-semibold text-gray-900">{selectedTicket.name}</h4>
+                    <div className="bg-blue-100 text-blue-800 text-xs px-3 py-1 rounded-full">
+                      {selectedTicket.duration >= 1440 
+                        ? `${Math.floor(selectedTicket.duration / 1440)} dager`
+                        : `${selectedTicket.duration} min`}
+                    </div>
+                  </div>
+                  <p className="text-sm text-gray-600 mb-4">{selectedTicket.description}</p>
+                  <div className="flex items-center justify-between pt-4 border-t border-gray-200">
+                    <span className="text-gray-700 font-medium">Totalpris</span>
+                    <span className="text-3xl font-bold text-gray-900">{selectedTicket.price} kr</span>
+                  </div>
+                </div>
+
+                {/* Info */}
+                <div className="bg-blue-50 rounded-xl p-4 border border-blue-100">
+                  <p className="text-sm text-blue-800">
+                    <strong>Viktig:</strong> Billetten aktiveres umiddelbart ved kjøp og kan ikke refunderes.
+                  </p>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="p-6 pt-0 flex gap-3">
+                <motion.button
+                  onClick={handleCancelPurchase}
+                  className="flex-1 py-3 bg-gray-100 text-gray-700 rounded-xl font-medium"
+                  whileTap={{ scale: 0.98 }}
+                >
+                  Avbryt
+                </motion.button>
+                <motion.button
+                  onClick={handleConfirmPurchase}
+                  className="flex-1 py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-xl font-medium shadow-lg"
+                  whileTap={{ scale: 0.98 }}
+                >
+                  Kjøp
+                </motion.button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
       </AnimatePresence>
+    </AnimatePresence>
   );
 }

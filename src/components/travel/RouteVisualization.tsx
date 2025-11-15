@@ -408,11 +408,11 @@ export default function RouteVisualization({ route, destinations, onPurchaseTick
       </div>
 
       {/* Action buttons */}
-      <div className="p-4 bg-white/80 backdrop-blur-xl border-t border-gray-100 space-y-2">
+      <div className="p-4 bg-white/80 backdrop-blur-xl border-t border-gray-100 flex gap-3">
         {/* Ticket button */}
         <motion.button 
           onClick={handleShowTicketOverview}
-          className="w-full py-2.5 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-2xl shadow-lg active:shadow-xl active:opacity-90 transition-all flex items-center justify-center gap-2"
+          className="flex-1 py-3.5 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-xl shadow-lg active:shadow-xl active:opacity-90 transition-all flex items-center justify-center gap-2"
           whileTap={{ scale: 0.98 }}
           whileHover={{ scale: 1.02 }}
         >
@@ -423,7 +423,7 @@ export default function RouteVisualization({ route, destinations, onPurchaseTick
         {/* Navigation button */}
         <motion.button 
           onClick={handleShowMap}
-          className="w-full py-2.5 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-2xl shadow-lg active:shadow-xl active:opacity-90 transition-all text-center"
+          className="flex-1 py-3.5 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-xl shadow-lg active:shadow-xl active:opacity-90 transition-all text-center"
           whileTap={{ scale: 0.98 }}
           whileHover={{ scale: 1.02 }}
         >

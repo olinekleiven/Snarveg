@@ -14,6 +14,9 @@ export const TopDownCar: React.FC<TopDownCarProps> = ({
   // Calculate height based on aspect ratio from reference image
   const height = size * 2.2; // Car is taller than wide (top-down view)
   
+  // Detect mobile for performance optimizations
+  const isMobile = typeof window !== 'undefined' && (window.innerWidth < 768 || 'ontouchstart' in window);
+  
   return (
     <svg
       className={className}
@@ -21,7 +24,17 @@ export const TopDownCar: React.FC<TopDownCarProps> = ({
       height={height}
       viewBox="0 0 80 176"
       xmlns="http://www.w3.org/2000/svg"
-      style={{ transformOrigin: 'center center' }}
+      preserveAspectRatio="xMidYMid meet"
+      style={{ 
+        transformOrigin: 'center center',
+        display: 'block',
+        // GPU acceleration on mobile
+        ...(isMobile && {
+          willChange: 'transform',
+          transform: 'translate3d(0, 0, 0)',
+          backfaceVisibility: 'hidden',
+        }),
+      }}
     >
       {/* Car body - rounded rectangular shape, modern and sporty */}
       <rect
@@ -167,25 +180,29 @@ export const TopDownCar: React.FC<TopDownCarProps> = ({
         opacity="0.9"
       />
 
-      {/* Subtle body contour lines for depth */}
-      <line
-        x1="20"
-        y1="40"
-        x2="20"
-        y2="136"
-        stroke="#1a1a1a"
-        strokeWidth="0.5"
-        opacity="0.3"
-      />
-      <line
-        x1="60"
-        y1="40"
-        x2="60"
-        y2="136"
-        stroke="#1a1a1a"
-        strokeWidth="0.5"
-        opacity="0.3"
-      />
+      {/* Subtle body contour lines for depth - skip on mobile for performance */}
+      {!isMobile && (
+        <>
+          <line
+            x1="20"
+            y1="40"
+            x2="20"
+            y2="136"
+            stroke="#1a1a1a"
+            strokeWidth="0.5"
+            opacity="0.3"
+          />
+          <line
+            x1="60"
+            y1="40"
+            x2="60"
+            y2="136"
+            stroke="#1a1a1a"
+            strokeWidth="0.5"
+            opacity="0.3"
+          />
+        </>
+      )}
     </svg>
   );
 };
