@@ -296,13 +296,13 @@ function MapView({ route, destinations, onClose }: MapViewProps) {
                   d={routePath}
                   fill="none"
                   stroke={routeColor}
-                  strokeWidth="6"
+                  strokeWidth="2"
                   strokeLinecap="round"
                   strokeLinejoin="round"
-                  strokeDasharray="7 4"
-                  opacity="0.25"
+                  strokeDasharray="4 3"
+                  opacity="0.2"
                   initial={{ pathLength: 0, opacity: 0 }}
-                  animate={{ pathLength: 1, opacity: 0.25 }}
+                  animate={{ pathLength: 1, opacity: 0.2 }}
                   transition={{ duration: 0.5, ease: "easeInOut" }}
                 />
                 {/* Main route line - goes through exact center of each node */}
@@ -311,14 +311,14 @@ function MapView({ route, destinations, onClose }: MapViewProps) {
                   d={routePath}
                   fill="none"
                   stroke={routeColor}
-                  strokeWidth="4"
+                  strokeWidth="1.5"
                   strokeLinecap="round"
                   strokeLinejoin="round"
-                  strokeDasharray="9 6"
+                  strokeDasharray="5 4"
                   initial={{ pathLength: 0, opacity: 0 }}
                   animate={{ pathLength: 1, opacity: 1 }}
                   transition={{ duration: 0.6, ease: "easeInOut" }}
-                  style={{ filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.2))' }}
+                  style={{ filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.15))' }}
                 />
               </>
             );
@@ -387,11 +387,11 @@ function MapView({ route, destinations, onClose }: MapViewProps) {
         <div className="flex gap-3">
           <button 
             onClick={handleShowDetails}
-            className="flex-1 py-3.5 bg-white text-gray-800 rounded-xl border-2 border-gray-300 hover:bg-gray-50 transition-colors text-center font-medium shadow-sm"
+            className="flex-1 py-3 bg-white text-gray-800 rounded-xl border border-gray-300 hover:bg-gray-50 transition-colors flex items-center justify-center font-medium shadow-sm h-[44px] box-border"
           >
             Se detaljer
           </button>
-          <button className="flex-1 py-3.5 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-xl shadow-lg hover:shadow-xl transition-all text-center">
+          <button className="flex-1 py-3 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-xl shadow-lg hover:shadow-xl transition-all flex items-center justify-center h-[44px]">
             Åpne i maps
           </button>
         </div>
