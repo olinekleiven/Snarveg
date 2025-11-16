@@ -172,7 +172,7 @@ export default function SettingsModal({ isOpen, onClose, currentPreferences, onS
           exit={{ y: '100%', opacity: 0 }}
           transition={{ type: 'spring', damping: 30, stiffness: 300 }}
           onClick={(e) => e.stopPropagation()}
-          className="bg-white w-full max-w-2xl max-h-[85vh] sm:max-h-[90vh] rounded-t-3xl sm:rounded-3xl overflow-hidden flex flex-col shadow-2xl mb-4 sm:mb-0"
+          className="bg-white w-full max-w-2xl max-h-[85vh] sm:max-h-[90vh] rounded-t-3xl sm:rounded-3xl overflow-hidden flex flex-col shadow-2xl"
         >
           {/* Header */}
           <div className="sticky top-0 bg-gradient-to-br from-blue-500 via-indigo-600 to-purple-600 text-white px-6 pt-6 pb-4 flex items-start justify-between z-10">
@@ -269,7 +269,12 @@ export default function SettingsModal({ isOpen, onClose, currentPreferences, onS
           </div>
 
           {/* Footer with action buttons */}
-          <div className="sticky bottom-0 bg-white border-t border-gray-100 p-6">
+          <div 
+            className="sticky bottom-0 bg-white border-t border-gray-100 p-6"
+            style={{
+              paddingBottom: 'max(1.5rem, calc(env(safe-area-inset-bottom, 0px) + 1.5rem))',
+            }}
+          >
             <div className="flex gap-3 justify-center">
               <motion.button
                 onClick={handleCancel}
