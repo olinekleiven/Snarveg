@@ -21,7 +21,8 @@ export default function TopBar({
     <motion.header 
       initial={{ y: -20, opacity: 0 }}
       animate={{ y: 0, opacity: 1 }}
-      className="sticky top-0 z-50 py-8"
+      className="sticky top-0 z-50 pb-8"
+      style={{ paddingTop: 'calc(2rem + 20px)' }}
     >
       <div className="px-4 flex flex-col items-center">
         <h1 className="text-5xl text-gray-900 tracking-tight text-center mb-2">Snarveg</h1>
