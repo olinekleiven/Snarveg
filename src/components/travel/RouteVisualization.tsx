@@ -408,7 +408,13 @@ export default function RouteVisualization({ route, destinations, onPurchaseTick
       </div>
 
       {/* Action buttons */}
-      <div className="p-4 bg-white/80 backdrop-blur-xl border-t border-gray-100 flex gap-3">
+      <div 
+        className="flex-shrink-0 px-4 pt-2 pb-3 flex gap-3"
+        style={{
+          paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 4px)',
+          marginBottom: '20px',
+        }}
+      >
         {/* Ticket button */}
         <motion.button 
           onClick={handleShowTicketOverview}

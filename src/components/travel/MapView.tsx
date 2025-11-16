@@ -377,11 +377,17 @@ function MapView({ route, destinations, onClose }: MapViewProps) {
       </div>
 
       {/* Bottom action bar */}
-      <div className="relative z-10 p-4 bg-white/95 backdrop-blur-sm border-t border-gray-200">
+      <div 
+        className="flex-shrink-0 relative z-10 px-4 pt-2 pb-3"
+        style={{
+          paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 4px)',
+          marginBottom: '20px',
+        }}
+      >
         <div className="flex gap-3">
           <button 
             onClick={handleShowDetails}
-            className="flex-1 py-3.5 bg-gray-100 text-gray-700 rounded-xl border border-gray-200 hover:bg-gray-200 transition-colors text-center"
+            className="flex-1 py-3.5 bg-white text-gray-800 rounded-xl border-2 border-gray-300 hover:bg-gray-50 transition-colors text-center font-medium shadow-sm"
           >
             Se detaljer
           </button>
