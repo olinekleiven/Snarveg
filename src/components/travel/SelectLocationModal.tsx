@@ -10,7 +10,7 @@ interface Coordinates {
 interface SelectLocationModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onNext: (coords: Coordinates, searchedText?: string) => void;
+  onNext: (coords: Coordinates | null, searchedText?: string) => void;
 }
 
 // Constants
@@ -34,6 +34,14 @@ function SelectLocationModal({ isOpen, onClose, onNext }: SelectLocationModalPro
   const [search, setSearch] = useState<string>('');
   const [coords, setCoords] = useState<Coordinates | null>(null);
 
+  // Reset state when modal closes
+  React.useEffect(() => {
+    if (!isOpen) {
+      setSearch('');
+      setCoords(null);
+    }
+  }, [isOpen]);
+
   const handleGridClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     const rect = (e.currentTarget as HTMLDivElement).getBoundingClientRect();
     const x = e.clientX - rect.left;
@@ -44,8 +52,9 @@ function SelectLocationModal({ isOpen, onClose, onNext }: SelectLocationModalPro
   }, []);
 
   const handleNext = useCallback(() => {
-    if (!coords) return;
+    // Allow proceeding with either coords (from pinning) or search text (without pinning)
     const trimmedSearch = search.trim();
+    if (!coords && !trimmedSearch) return; // Need either pin or search
     onNext(coords, trimmedSearch || undefined);
   }, [coords, search, onNext]);
 
@@ -146,7 +155,7 @@ function SelectLocationModal({ isOpen, onClose, onNext }: SelectLocationModalPro
               <button
                 type="button"
                 onClick={handleNext}
-                disabled={!coords}
+                disabled={!coords && !search.trim()}
                 className="flex-1 px-6 py-3.5 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 text-white active:opacity-80 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg"
               >
                 Neste

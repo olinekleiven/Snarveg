@@ -93,7 +93,14 @@ function EditDestinationModal({
       setLabel(displayLabel);
       setSelectedEmoji(destination.emoji);
       setSelectedColor(destination.color);
-      setAddress(destination.address || '');
+      
+      // Pre-fill address with default only if coordinates exist (from map pinning) but no address is set
+      // If user goes directly to edit modal without pinning, address should be empty
+      const defaultAddress = destination.coordinates && !destination.address 
+        ? 'Eksempelveien 7, 5015 Bergen' 
+        : (destination.address || '');
+      setAddress(defaultAddress);
+      
       setLatitude(destination.coordinates?.lat?.toString() || '');
       setLongitude(destination.coordinates?.lng?.toString() || '');
       setNotes(destination.notes || '');

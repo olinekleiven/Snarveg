@@ -454,12 +454,14 @@ export default function App() {
       <SelectLocationModal
         isOpen={isSelectLocationOpen}
         onClose={() => setIsSelectLocationOpen(false)}
-        onNext={(coords) => {
-          // Prefill coordinates on the destination and open edit step
+        onNext={(coords, searchedText) => {
+          // Update destination with coordinates (if pinned) and/or search text
           if (editingDestination) {
             setEditingDestination({
               ...editingDestination,
-              coordinates: coords,
+              // Only set coordinates if user actually pinned on map
+              coordinates: coords || undefined,
+              // Don't set address here - let EditDestinationModal handle it
             });
           }
           setIsSelectLocationOpen(false);
