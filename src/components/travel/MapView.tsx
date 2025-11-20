@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Navigation, Clock, TrendingUp, Zap, MapPin, X, Bike } from 'lucide-react';
 import { Route, Destination } from './types';
+import MinimalMapBackground from './MinimalMapBackground';
 
 interface MapViewProps {
   route: Route;
@@ -173,11 +174,6 @@ function MapView({ route, destinations, onClose }: MapViewProps) {
     setShowRouteDetails(false);
   }, []);
 
-  // Grid cells for map
-  const GRID_COLS = 6;
-  const GRID_ROWS = 4;
-  const GRID_CELLS = Array.from({ length: GRID_COLS * GRID_ROWS });
-
   return (
     <div className="h-full flex flex-col bg-gradient-to-br from-green-50 via-blue-50 to-purple-50 relative overflow-hidden">
       {/* Header - matching "Din reiserute" style */}
@@ -197,13 +193,8 @@ function MapView({ route, destinations, onClose }: MapViewProps) {
 
       {/* Map visualization - simple and clean */}
       <div className="flex-1 relative z-10 overflow-hidden p-4">
-        <div className="relative w-full h-full rounded-2xl border border-gray-200 bg-gray-50 overflow-hidden">
-          {/* Simple grid pattern */}
-          <div className="absolute inset-0 grid grid-cols-6 grid-rows-4 opacity-30">
-            {GRID_CELLS.map((_, idx) => (
-              <div key={idx} className="border border-gray-300/40" />
-            ))}
-          </div>
+        <div className="relative w-full h-full rounded-2xl border border-gray-200 bg-gray-100 overflow-hidden">
+          <MinimalMapBackground />
         {/* Destination markers - smaller and simpler */}
         <div className="absolute inset-0 z-10">
           {routeDestinations.map((dest, index) => {

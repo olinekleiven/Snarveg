@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import MinimalMapBackground from './MinimalMapBackground';
 
 interface Coordinates {
   lat: number;
@@ -109,12 +110,13 @@ function SelectLocationModal({ isOpen, onClose, onNext }: SelectLocationModalPro
             {/* Fake map grid - click anywhere to set a pin */}
             <div className="px-6">
               <div
-                className="relative w-full aspect-[4/3] rounded-2xl border border-gray-200 bg-gradient-to-br from-green-50 via-blue-50 to-purple-50 overflow-hidden"
+                className="relative w-full aspect-[4/3] rounded-2xl border border-gray-200 bg-gray-100 overflow-hidden cursor-crosshair"
                 onClick={handleGridClick}
               >
-                <div className="absolute inset-0 grid grid-cols-6 grid-rows-4">
+                <MinimalMapBackground />
+                <div className="absolute inset-0 grid grid-cols-6 grid-rows-4 opacity-50">
                   {GRID_CELLS.map((_, idx) => (
-                    <div key={idx} className="border border-white/50" />
+                    <div key={idx} className="border border-white/60" />
                   ))}
                 </div>
                 {coords && pinStyle && (
